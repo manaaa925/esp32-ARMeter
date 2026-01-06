@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
+  <script src="https://unpkg.com/p5ble@0.0.7/dist/p5.ble.js"></script>
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  
+  <link rel="stylesheet" type="text/css" href="style.css">
+  <meta charset="utf-8" />
+  <style>
+    /* 接続ボタンを画面中央下部に配置 */
+    #connectBtn {
+      position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+      padding: 15px 30px; font-size: 20px; color: white;
+      background-color: #007AFF; border: none; border-radius: 30px;
+      z-index: 1000; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <button id="connectBtn">Connect ESP32</button>
+
+  <a-scene embedded arjs='sourceType: webcam; detectionMode: mono_and_matrix; matrixCodeType: 3x3;'>
+    
+    <a-marker type='barcode' value='6'>
+      <a-text value="Voltage" color="white" position="-0.8 0.5 -0.5" rotation="-90 0 0" align="center"></a-text>
+      <a-text id="voltText" value="--- V" color="#FF3B30" position="-0.8 0.5 0.2" rotation="-90 0 0" scale="2.5 2.5 2.5" align="center"></a-text>
+
+      <a-text value="Current" color="white" position="0.8 0.5 -0.5" rotation="-90 0 0" align="center"></a-text>
+      <a-text id="currText" value="--- A" color="#FFCC00" position="0.8 0.5 0.2" rotation="-90 0 0" scale="2.5 2.5 2.5" align="center"></a-text>
+      
+      <a-box position="0 0 0" scale="0.3 0.3 0.3" material="opacity: 0.4; color: #5AC8FA;"></a-box>
+    </a-marker>
+
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <script src="sketch.js"></script>
+</body>
+</html>
