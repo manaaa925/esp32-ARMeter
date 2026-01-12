@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AR FINAL</title>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <script src="https://unpkg.com/p5ble@0.0.7/dist/p5.ble.js"></script>
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #connectBtn {
+      position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+      padding: 15px 30px; font-size: 18px; font-weight: bold; color: white;
+      background-color: #007AFF; border: none; border-radius: 30px;
+      z-index: 1000;
+    }
+  </style>
+</head>
+
+<body>
+  <button id="connectBtn">Connect ESP32</button>
+
+  <a-scene embedded arjs='sourceType: webcam; detectionMode: mono_and_matrix; matrixCodeType: 3x3; debugUIEnabled: false;'>
+    
+    <a-marker type='barcode' value='6'>
+      
+      <a-box position="0 0 0" scale="0.01 0.01 0.01" color="red"></a-box>
+
+      <a-entity position="-0.06 0.02 0.06">
+          <a-text value="Resistor" color="cyan" position="0 0.02 -0.02" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+          <a-text id="currText" value="--- A" color="blue" rotation="-90 0 0" scale="2.5 2.5 2.5" align="center"></a-text>
+      </a-entity>
+
+      <a-entity position="-0.12 0.02 0.06">
+          <a-text value="LED" color="white" position="0 0.02 -0.02" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+          <a-text id="voltText" value="--- V" color="#FF3B30" rotation="-90 0 0" scale="2.5 2.5 2.5" align="center"></a-text>
+      </a-entity>
+
+    </a-marker>
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <script>
+    const serviceUuid = "4FAF0001-A428-4034-B095-81E5B9420000";
+    const targetUuid  = "BEB5483E-36E1-4688-B7F5-EA07361B26A8";
+    let myBLE, myCharacteristic;
+
+    function setup() {
+      noCanvas();
+      myBLE = new p5ble();
+      const connectBtn = select("#connectBtn");
+      if (connectBtn) connectBtn.mousePressed(connectToBle);
+    }
+
+    function connectToBle() {
+      myBLE.connect(serviceUuid, gotCharacteristics);
+    }
+
+    function gotCharacteristics(error, characteristics) {
+      if (error) return;
+      select("#connectBtn").hide();
+      for (let i = 0; i < characteristics.length; i++) {
+        if (characteristics[i].uuid.toLowerCase() == targetUuid.toLowerCase()) {
+          myCharacteristic = characteristics[i];
+          setInterval(readDataLoop, 500);
+          break;
+        }
+      }
+    }
+
+    function readDataLoop() {
+      if (myBLE.isConnected() && myCharacteristic) {
+        myBLE.read(myCharacteristic, 'string', handleData);
+      }
+    }
+
+    function handleData(error, data) {
+      if (error || !data) return;
+      let values = String(data).split(',');
+      if (values.length >= 2) {
+        let voltage = values[0];
+        let current = values[1];
+
+        // 電圧表示の更新
+        let voltEl = document.querySelector('#voltText');
+        if (voltEl) voltEl.setAttribute('value', voltage + " V");
+        
+        // 電流表示の更新
+        let currEl = document.querySelector('#currText');
+        if (currEl) currEl.setAttribute('value', current + " A");
+      }
+    }
+  </script>
+</body>
+</html>
