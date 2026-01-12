@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>AR Multi Marker Wide</title>
+  <title>AR Ohm's Law</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <script src="https://unpkg.com/p5ble@0.0.7/dist/p5.ble.js"></script>
@@ -27,21 +27,23 @@
   <a-scene embedded arjs='sourceType: webcam; detectionMode: mono_and_matrix; matrixCodeType: 3x3; debugUIEnabled: false;'>
     
     <a-marker type='barcode' value='6'>
-       <a-text value="Circuit Monitor" color="cyan" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+       <a-text value="Ohm's Law" color="cyan" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
     </a-marker>
 
 
     <a-marker type='barcode' value='0'>
-       <a-text value="Resistor" color="yellow" position="0 0.02 -0.3" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+       <a-text value="Resistor" color="white" position="0 0.02 -0.3" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
        
-       <a-text id="currText" value="--- A" color="yellow" position="0 0.02 0.3" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
+       <a-text id="currText" value="--- A" color="yellow" position="0 0.02 0" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
+
+       <a-text id="resText" value="R: --- ohm" color="#00FF00" position="0 0.02 0.3" rotation="-90 0 0" align="center" scale="2.5 2.5 2.5"></a-text>
     </a-marker>
 
 
     <a-marker type='barcode' value='1'>
        <a-text value="LED" color="white" position="0 0.02 -0.3" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
        
-       <a-text id="voltText" value="--- V" color="#FF3B30" position="0 0.02 0.3" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
+       <a-text id="voltText" value="--- V" color="#FF3B30" position="0 0.02 0" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
     </a-marker>
 
     <a-entity camera></a-entity>
@@ -85,14 +87,30 @@
       if (error || !data) return;
       let values = String(data).split(',');
       if (values.length >= 2) {
-        let voltage = values[0];
-        let current = values[1];
+        // 文字列を数値に変換（計算用）
+        let voltage = parseFloat(values[0]);
+        let current = parseFloat(values[1]);
 
+        // 1. 電圧・電流の表示更新
         let voltEl = document.querySelectorAll('#voltText');
         voltEl.forEach(el => el.setAttribute('value', voltage + " V"));
         
         let currEl = document.querySelectorAll('#currText');
         currEl.forEach(el => el.setAttribute('value', current + " A"));
+
+        // 2. ★オームの法則計算 (R = V / I)
+        let resistanceText = "---";
+        if (current > 0.0001) { // 0で割るのを防ぐ
+            // V / I を計算し、小数点以下1桁にする
+            let resistance = voltage / current;
+            resistanceText = resistance.toFixed(1) + " ohm";
+        } else {
+            resistanceText = "INF"; // 電流が0の時は無限大(INF)
+        }
+
+        // 3. 抵抗値の表示更新
+        let resEl = document.querySelectorAll('#resText');
+        resEl.forEach(el => el.setAttribute('value', "R: " + resistanceText));
       }
     }
   </script>
