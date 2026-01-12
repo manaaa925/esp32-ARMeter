@@ -1,18 +1,17 @@
-// ESP32のUUID設定
+// --- 設定値：Arduinoコードと完全に一致させる必要があります ---
 const serviceUuid = "4FAF0001-A428-4034-B095-81E5B9420000";
-const voltageUuid = "BEB5483E-36E1-4688-B7F5-EA07361B26A8";
-const currentUuid = "BEB5483E-36E1-4688-B7F5-EA07361B26A9";
+// Arduinoで設定した DATA_CHAR_UUID と同じにする
+const dataUuid    = "BEB5483E-36E1-4688-B7F5-EA07361B26A8";
 
 let myBLE;
 
 function setup() {
-  // 【重要】p5.jsのキャンバスを作らない設定
-  // これがないと、p5.jsが白い画面を作ってARカメラを隠してしまいます
+  // AR画面の邪魔をしないようにキャンバスは作らない
   noCanvas();
 
   myBLE = new p5ble();
 
-  // HTMLのボタンに接続関数を割り当て
+  // HTMLのボタンに接続機能を割り当て
   const connectBtn = select("#connectBtn");
   if (connectBtn) {
     connectBtn.mousePressed(connectToBle);
@@ -20,6 +19,7 @@ function setup() {
 }
 
 function connectToBle() {
+  // BLE接続を開始
   myBLE.connect(serviceUuid, gotCharacteristics);
   updateDebug("Status: Connecting...");
 }
@@ -30,58 +30,54 @@ function gotCharacteristics(error, characteristics) {
     updateDebug("Status: Connection Error!");
     return;
   }
+  
   console.log('Connected to ESP32!');
-  select("#connectBtn").hide(); // 接続成功後にボタンを隠す
-  updateDebug("Status: Connected!<br>Waiting for data...");
+  // 接続できたらボタンを隠す
+  select("#connectBtn").hide();
+  updateDebug("Status: Connected! Waiting for data...");
 
-  // 各UUIDに対応するデータ通知を開始
+  // キャラクタリスティックを探して通知(Notify)をONにする
   for (let i = 0; i < characteristics.length; i++) {
-    if (characteristics[i].uuid == voltageUuid.toLowerCase()) {
-      myBLE.startNotifications(characteristics[i], handleVoltage);
-    }
-    if (characteristics[i].uuid == currentUuid.toLowerCase()) {
-      myBLE.startNotifications(characteristics[i], handleCurrent);
+    if (characteristics[i].uuid == dataUuid.toLowerCase()) {
+      // 見つけたら handleData 関数を呼び出すように設定
+      myBLE.startNotifications(characteristics[i], handleData);
+      break;
     }
   }
 }
 
-// 受信した電圧値をARテキストに反映
-function handleVoltage(data) {
-  // 数値にして桁数を揃える
-  let val = Number(data).toFixed(3);
-  
-  // A-Frameのテキストを書き換え
-  // document.querySelectorを使って、A-Frameの世界にある物体を操作します
-  let el = document.querySelector('#voltText'); 
-  if (el) el.setAttribute('value', val + " V");
+// データ受信時に実行される関数
+function handleData(data) {
+  // 送られてくるデータは "3.300,0.120" のような文字列
+  // これをカンマ(,)で2つに分割する
+  let values = String(data).split(',');
 
-  // デバッグ表示も更新（トラブル時に役立ちます）
-  updateDebug("Volt: " + val + " V");
+  // 正しく2つのデータに分かれたか確認
+  if (values.length >= 2) {
+    let voltage = values[0]; // 前半が電圧
+    let current = values[1]; // 後半が電流
+
+    // 1. AR空間のテキスト(A-Frame)を書き換え
+    let voltEl = document.querySelector('#voltText');
+    if (voltEl) voltEl.setAttribute('value', voltage + " V");
+
+    let currEl = document.querySelector('#currText');
+    if (currEl) currEl.setAttribute('value', current + " A");
+
+    // 2. 左上のデバッグ表示も更新
+    updateDebug("Volt: " + voltage + " V<br>Curr: " + current + " A");
+  }
 }
 
-// 受信した電流値をARテキストに反映
-function handleCurrent(data) {
-  let val = Number(data).toFixed(3);
-  
-  let el = document.querySelector('#currText');
-  if (el) el.setAttribute('value', val + " A");
-  
-  updateDebug("Curr: " + val + " A");
-}
-
-// 画面左上のデバッグ表示を更新する関数
+// 画面左上のデバッグ表示を更新する便利関数
 function updateDebug(msg) {
-  let debugEl = document.querySelector('#debugConsole');
-  if (debugEl) {
-    // 電圧・電流の場合は追記、それ以外は上書きなど簡易的な処理
-    if(msg.startsWith("Volt") || msg.startsWith("Curr")) {
-       // 現在の内容を取得して書き換え（簡易実装）
-       if(msg.startsWith("Volt")) debugEl.innerHTML = debugEl.innerHTML.replace(/Volt: .*?<br>/, msg + "<br>");
-       else if(msg.startsWith("Curr")) debugEl.innerHTML = debugEl.innerHTML.replace(/Curr: .*?$/, msg);
-       else debugEl.innerHTML += "<br>" + msg;
+  let el = document.querySelector('#debugConsole');
+  if (el) {
+    // 電圧電流のデータなら書き換え、それ以外（ステータス）ならそのまま表示
+    if (msg.startsWith("Volt")) {
+       el.innerHTML = "Status: Receiving<br>" + msg;
     } else {
-       // ステータス更新時
-       debugEl.innerHTML = "Status: " + msg + "<br>Volt: --- V<br>Curr: --- A";
+       el.innerHTML = msg;
     }
   }
 }
