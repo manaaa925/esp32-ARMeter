@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>AR Multi Marker Fix</title>
+  <title>AR Multi Marker Wide</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <script src="https://unpkg.com/p5ble@0.0.7/dist/p5.ble.js"></script>
@@ -32,16 +32,16 @@
 
 
     <a-marker type='barcode' value='0'>
-       <a-text value="Resistor" color="yellow" position="0 0.02 -0.06" rotation="-90 0 0" align="center" scale="1 1 1"></a-text>
+       <a-text value="Resistor" color="yellow" position="0 0.02 -0.3" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
        
-       <a-text id="currText" value="--- A" color="yellow" position="0 0.02 0.06" rotation="-90 0 0" align="center" scale="2 2 2"></a-text>
+       <a-text id="currText" value="--- A" color="yellow" position="0 0.02 0.3" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
     </a-marker>
 
 
     <a-marker type='barcode' value='1'>
-       <a-text value="LED" color="white" position="0 0.02 -0.06" rotation="-90 0 0" align="center" scale="1 1 1"></a-text>
+       <a-text value="LED" color="white" position="0 0.02 -0.3" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
        
-       <a-text id="voltText" value="--- V" color="#FF3B30" position="0 0.02 0.06" rotation="-90 0 0" align="center" scale="2 2 2"></a-text>
+       <a-text id="voltText" value="--- V" color="#FF3B30" position="0 0.02 0.3" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
     </a-marker>
 
     <a-entity camera></a-entity>
@@ -88,7 +88,6 @@
         let voltage = values[0];
         let current = values[1];
 
-        // 全てのマーカーの表示を更新
         let voltEl = document.querySelectorAll('#voltText');
         voltEl.forEach(el => el.setAttribute('value', voltage + " V"));
         
