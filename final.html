@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>AR FINAL</title>
+  <title>AR FINAL v2</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <script src="https://unpkg.com/p5ble@0.0.7/dist/p5.ble.js"></script>
@@ -28,16 +28,26 @@
     
     <a-marker type='barcode' value='6'>
       
-      <a-box position="0 0 0" scale="0.01 0.01 0.01" color="red"></a-box>
+      <a-box position="0 0 0" scale="0.05 0.05 0.05" color="red"></a-box>
 
-      <a-entity position="-0.6 0.2 0.8">
-          <a-text value="Resistor" color="cyan" position="0 0.015 -0.015" rotation="-90 0 0" align="center" scale="1.0 1.0 1.0"></a-text>
-          <a-text id="currText" value="--- A" color="blue" rotation="-90 0 0" scale="1.5 1.5 1.5" align="center"></a-text>
+      <a-entity position="-0.2 0.2 0">
+          
+          <a-text value="Current:" color="cyan" position="0 0.1 0" rotation="-90 0 0" align="center" scale="1.2 1.2 1.2"></a-text>
+          <a-text id="currText" value="--- A" color="blue" position="0 0 0.1" rotation="-90 0 0" align="center" scale="2.0 2.0 2.0"></a-text>
+
+          <a-text value="Voltage:" color="white" position="0 0 0.3" rotation="-90 0 0" align="center" scale="1.2 1.2 1.2"></a-text>
+          <a-text id="voltText" value="--- V" color="#FF3B30" position="0 0 0.4" rotation="-90 0 0" align="center" scale="2.0 2.0 2.0"></a-text>
       </a-entity>
 
-      <a-entity position="-1.5 0.2 0.8">
-          <a-text value="LED" color="white" position="0 0.015 -0.015" rotation="-90 0 0" align="center" scale="1.0 1.0 1.0"></a-text>
-          <a-text id="voltText" value="--- V" color="#FF3B30" rotation="-90 0 0" scale="1.5 1.5 1.5" align="center"></a-text>
+
+      <a-entity position="-0.3 0.2 0.6">
+          <a-text value="Resistor" color="cyan" rotation="-90 0 0" align="center" scale="1.2 1.2 1.2"></a-text>
+          <a-text value="v" color="cyan" position="0 0 0.1" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+      </a-entity>
+
+      <a-entity position="-0.7 0.2 0.6">
+          <a-text value="LED" color="white" rotation="-90 0 0" align="center" scale="1.2 1.2 1.2"></a-text>
+          <a-text value="v" color="white" position="0 0 0.1" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
       </a-entity>
 
     </a-marker>
@@ -85,11 +95,10 @@
         let voltage = values[0];
         let current = values[1];
 
-        // 電圧表示の更新
+        // 表示更新
         let voltEl = document.querySelector('#voltText');
         if (voltEl) voltEl.setAttribute('value', voltage + " V");
         
-        // 電流表示の更新
         let currEl = document.querySelector('#currText');
         if (currEl) currEl.setAttribute('value', current + " A");
       }
