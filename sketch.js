@@ -1,3 +1,4 @@
+// ESP32のUUID設定
 const serviceUuid = "4FAF0001-A428-4034-B095-81E5B9420000";
 const voltageUuid = "BEB5483E-36E1-4688-B7F5-EA07361B26A8";
 const currentUuid = "BEB5483E-36E1-4688-B7F5-EA07361B26A9";
@@ -5,29 +6,35 @@ const currentUuid = "BEB5483E-36E1-4688-B7F5-EA07361B26A9";
 let myBLE;
 
 function setup() {
+  // 【重要】p5.jsのキャンバスを作らない設定
+  // これがないと、p5.jsが白い画面を作ってARカメラを隠してしまいます
   noCanvas();
+
   myBLE = new p5ble();
+
+  // HTMLのボタンに接続関数を割り当て
   const connectBtn = select("#connectBtn");
-  connectBtn.mousePressed(connectToBle);
+  if (connectBtn) {
+    connectBtn.mousePressed(connectToBle);
+  }
 }
 
 function connectToBle() {
   myBLE.connect(serviceUuid, gotCharacteristics);
-  document.querySelector('#debugConsole').innerHTML = "Status: Connecting...";
+  updateDebug("Status: Connecting...");
 }
 
 function gotCharacteristics(error, characteristics) {
   if (error) {
     console.error('BLE Error:', error);
-    document.querySelector('#debugConsole').innerHTML = "Status: Error!";
+    updateDebug("Status: Connection Error!");
     return;
   }
-  console.log('Connected!');
-  select("#connectBtn").hide();
-  
-  // デバッグ表示更新
-  document.querySelector('#debugConsole').innerHTML = "Status: Connected!<br>Volt: ---<br>Curr: ---";
+  console.log('Connected to ESP32!');
+  select("#connectBtn").hide(); // 接続成功後にボタンを隠す
+  updateDebug("Status: Connected!<br>Waiting for data...");
 
+  // 各UUIDに対応するデータ通知を開始
   for (let i = 0; i < characteristics.length; i++) {
     if (characteristics[i].uuid == voltageUuid.toLowerCase()) {
       myBLE.startNotifications(characteristics[i], handleVoltage);
@@ -38,37 +45,43 @@ function gotCharacteristics(error, characteristics) {
   }
 }
 
+// 受信した電圧値をARテキストに反映
 function handleVoltage(data) {
+  // 数値にして桁数を揃える
   let val = Number(data).toFixed(3);
   
-  // 1. AR空間のテキストを更新
-  let arEl = document.querySelector('#arVolt');
-  if (arEl) arEl.setAttribute('value', val + " V");
+  // A-Frameのテキストを書き換え
+  // document.querySelectorを使って、A-Frameの世界にある物体を操作します
+  let el = document.querySelector('#voltText'); 
+  if (el) el.setAttribute('value', val + " V");
 
-  // 2. 画面左上のデバッグ表示を更新
-  updateDebugDisplay("Volt", val + " V");
+  // デバッグ表示も更新（トラブル時に役立ちます）
+  updateDebug("Volt: " + val + " V");
 }
 
+// 受信した電流値をARテキストに反映
 function handleCurrent(data) {
   let val = Number(data).toFixed(3);
   
-  // 1. AR空間のテキストを更新
-  let arEl = document.querySelector('#arCurr');
-  if (arEl) arEl.setAttribute('value', val + " A");
-
-  // 2. 画面左上のデバッグ表示を更新
-  updateDebugDisplay("Curr", val + " A");
+  let el = document.querySelector('#currText');
+  if (el) el.setAttribute('value', val + " A");
+  
+  updateDebug("Curr: " + val + " A");
 }
 
-// デバッグ表示書き換え用ヘルパー
-function updateDebugDisplay(type, val) {
-  let consoleDiv = document.querySelector('#debugConsole');
-  let currentHTML = consoleDiv.innerHTML;
-  
-  // 正規表現で数値を書き換え（簡易実装）
-  if(type === "Volt") {
-    consoleDiv.innerHTML = currentHTML.replace(/Volt: .*?<br>/, "Volt: " + val + "<br>");
-  } else if (type === "Curr") {
-     consoleDiv.innerHTML = currentHTML.replace(/Curr: .*?$/, "Curr: " + val);
+// 画面左上のデバッグ表示を更新する関数
+function updateDebug(msg) {
+  let debugEl = document.querySelector('#debugConsole');
+  if (debugEl) {
+    // 電圧・電流の場合は追記、それ以外は上書きなど簡易的な処理
+    if(msg.startsWith("Volt") || msg.startsWith("Curr")) {
+       // 現在の内容を取得して書き換え（簡易実装）
+       if(msg.startsWith("Volt")) debugEl.innerHTML = debugEl.innerHTML.replace(/Volt: .*?<br>/, msg + "<br>");
+       else if(msg.startsWith("Curr")) debugEl.innerHTML = debugEl.innerHTML.replace(/Curr: .*?$/, msg);
+       else debugEl.innerHTML += "<br>" + msg;
+    } else {
+       // ステータス更新時
+       debugEl.innerHTML = "Status: " + msg + "<br>Volt: --- V<br>Curr: --- A";
+    }
   }
 }
