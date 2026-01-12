@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AR New</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <script src="https://unpkg.com/p5ble@0.0.7/dist/p5.ble.js"></script>
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #connectBtn {
+      position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+      padding: 15px 30px; font-size: 18px; font-weight: bold; color: white;
+      background-color: #007AFF; border: none; border-radius: 30px;
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+  <button id="connectBtn">Connect ESP32</button>
+
+  <a-scene embedded arjs='sourceType: webcam; detectionMode: mono_and_matrix; matrixCodeType: 3x3;'>
+    <a-marker type='barcode' value='6'>
+      
+      <a-box position="0 0 0" scale="0.01 0.01 0.01" color="red"></a-box>
+
+      <a-entity position="-0.05 0.02 0.08">
+          <a-text value="Resistor" color="yellow" position="0 0.02 -0.02" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+          <a-text id="currText" value="--- A" color="#FFCC00" rotation="-90 0 0" scale="2.5 2.5 2.5" align="center"></a-text>
+      </a-entity>
+
+      <a-entity position="-0.10 0.02 0.08">
+          <a-text value="LED" color="white" position="0 0.02 -0.02" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+          <a-text id="voltText" value="--- V" color="#FF3B30" rotation="-90 0 0" scale="2.5 2.5 2.5" align="center"></a-text>
+      </a-entity>
+
+    </a-marker>
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <script src="sketch_new.js"></script>
+</body>
+</html>
