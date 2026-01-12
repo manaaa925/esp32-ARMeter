@@ -12,8 +12,6 @@
   
   <style>
     body { margin: 0; overflow: hidden; }
-    
-    /* 接続ボタン */
     #connectBtn {
       position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
       padding: 15px 30px; font-size: 18px; font-weight: bold; color: white;
@@ -29,19 +27,23 @@
     
     <a-marker type='barcode' value='6'>
       
-      <a-box position="0 0 0" scale="1.1 0.1 1.1" color="blue" opacity="0.3"></a-box>
+      <a-box position="0 0 0" scale="0.01 0.01 0.01" color="red"></a-box>
 
-      <a-text value="Voltage" color="white" position="-1 0.5 -0.5" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
-      <a-text id="voltText" value="--- V" color="#FF3B30" position="-1 0.5 0.2" rotation="-90 0 0" scale="3 3 3" align="center"></a-text>
+      <a-entity position="-0.003 0.02 0.043">
+          <a-text value="Resistor" color="yellow" position="0 0.02 -0.02" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+          <a-text id="currText" value="--- A" color="#FFCC00" rotation="-90 0 0" scale="3 3 3" align="center"></a-text>
+      </a-entity>
 
-      <a-text value="Current" color="white" position="1 0.5 -0.5" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
-      <a-text id="currText" value="--- A" color="#FFCC00" position="1 0.5 0.2" rotation="-90 0 0" scale="3 3 3" align="center"></a-text>
-      
+      <a-entity position="-0.058 0.02 0.069">
+          <a-text value="LED" color="white" position="0 0.02 -0.02" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+          <a-text id="voltText" value="--- V" color="#FF3B30" rotation="-90 0 0" scale="3 3 3" align="center"></a-text>
+      </a-entity>
+
     </a-marker>
 
     <a-entity camera></a-entity>
   </a-scene>
 
-  <script src="sketch.js?ver=FINAL"></script>
+  <script src="sketch.js?ver=STEP1"></script>
 </body>
 </html>
