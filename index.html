@@ -1,35 +1,37 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AR Monitor</title>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <script src="https://unpkg.com/p5ble@0.0.7/dist/p5.ble.js"></script>
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
   
-  <meta charset="utf-8" />
   <style>
+    body { margin: 0; overflow: hidden; }
+    
     /* 接続ボタン */
     #connectBtn {
       position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-      padding: 15px 30px; font-size: 20px; color: white;
+      padding: 15px 30px; font-size: 18px; font-weight: bold; color: white;
       background-color: #007AFF; border: none; border-radius: 30px;
-      z-index: 1000; cursor: pointer;
+      z-index: 1000; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
-    /* 【追加】デバッグ用モニタ（画面左上） */
+
+    /* デバッグモニタ（左上） */
     #debugConsole {
       position: absolute; top: 10px; left: 10px;
-      padding: 10px; background: rgba(0, 0, 0, 0.7);
-      color: lime; font-family: monospace; font-size: 16px;
-      z-index: 1000; pointer-events: none;
+      padding: 8px; background: rgba(0, 0, 0, 0.6);
+      color: #00FF00; font-family: monospace; font-size: 14px;
+      z-index: 1000; pointer-events: none; border-radius: 4px;
     }
   </style>
 </head>
 <body>
-  <div id="debugConsole">
-    Status: Waiting...<br>
-    Volt: --- V<br>
-    Curr: --- A
-  </div>
+  <div id="debugConsole">Status: Waiting for button...</div>
 
   <button id="connectBtn">Connect ESP32</button>
 
@@ -37,13 +39,13 @@
     
     <a-marker type='barcode' value='6'>
       
-      <a-box position="0 0.5 0" scale="0.5 0.5 0.5" color="green" opacity="0.5"></a-box>
+      <a-box position="0 0 0" scale="1.1 0.1 1.1" color="blue" opacity="0.3"></a-box>
 
-      <a-text value="Voltage" color="white" position="-1 0.5 -0.6" rotation="-90 0 0" align="center"></a-text>
-      <a-text id="arVolt" value="0.000 V" color="#FF3B30" position="-1 0.5 0" rotation="-90 0 0" scale="3 3 3" align="center"></a-text>
+      <a-text value="Voltage" color="white" position="-1 0.5 -0.5" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+      <a-text id="voltText" value="--- V" color="#FF3B30" position="-1 0.5 0.2" rotation="-90 0 0" scale="3 3 3" align="center"></a-text>
 
-      <a-text value="Current" color="white" position="1 0.5 -0.6" rotation="-90 0 0" align="center"></a-text>
-      <a-text id="arCurr" value="0.000 A" color="#FFCC00" position="1 0.5 0" rotation="-90 0 0" scale="3 3 3" align="center"></a-text>
+      <a-text value="Current" color="white" position="1 0.5 -0.5" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+      <a-text id="currText" value="--- A" color="#FFCC00" position="1 0.5 0.2" rotation="-90 0 0" scale="3 3 3" align="center"></a-text>
       
     </a-marker>
 
