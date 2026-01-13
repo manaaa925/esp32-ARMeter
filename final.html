@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>AR Ohm's Law</title>
+  <title>AR Graph Monitor</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <script src="https://unpkg.com/p5ble@0.0.7/dist/p5.ble.js"></script>
@@ -18,32 +18,41 @@
       background-color: #007AFF; border: none; border-radius: 30px;
       z-index: 1000;
     }
+    /* グラフ描画用のキャンバス（画面には出さないので隠す） */
+    #graphCanvas {
+      position: absolute; top: 0; left: 0;
+      z-index: -1; visibility: hidden;
+    }
   </style>
 </head>
 
 <body>
   <button id="connectBtn">Connect ESP32</button>
 
+  <canvas id="graphCanvas" width="512" height="256"></canvas>
+
   <a-scene embedded arjs='sourceType: webcam; detectionMode: mono_and_matrix; matrixCodeType: 3x3; debugUIEnabled: false;'>
     
     <a-marker type='barcode' value='6'>
-       <a-text value="Ohm's Law" color="cyan" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+       <a-text value="Real-time Graph" color="white" position="0 0.1 -0.6" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+       
+       <a-plane id="graphPlane" position="0 0.1 0" rotation="-90 0 0" width="2" height="1" material="src: #graphCanvas; transparent: true; opacity: 0.9;"></a-plane>
     </a-marker>
 
 
     <a-marker type='barcode' value='0'>
-       <a-text value="Resistor" color="white" position="0 0.02 -0.3" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+       <a-text value="Resistor" color="yellow" position="0 0.02 -0.6" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
        
        <a-text id="currText" value="--- A" color="yellow" position="0 0.02 0" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
 
-       <a-text id="resText" value="R: --- ohm" color="#00FF00" position="0 0.02 0.3" rotation="-90 0 0" align="center" scale="2.5 2.5 2.5"></a-text>
+       <a-text id="resText" value="R: --- ohm" color="#00FF00" position="0 0.02 0.6" rotation="-90 0 0" align="center" scale="2.5 2.5 2.5"></a-text>
     </a-marker>
 
 
     <a-marker type='barcode' value='1'>
        <a-text value="LED" color="white" position="0 0.02 -0.3" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
        
-       <a-text id="voltText" value="--- V" color="#FF3B30" position="0 0.02 0" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
+       <a-text id="voltText" value="--- V" color="#FF3B30" position="0 0.02 0.3" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
     </a-marker>
 
     <a-entity camera></a-entity>
@@ -53,12 +62,19 @@
     const serviceUuid = "4FAF0001-A428-4034-B095-81E5B9420000";
     const targetUuid  = "BEB5483E-36E1-4688-B7F5-EA07361B26A8";
     let myBLE, myCharacteristic;
+    
+    // グラフ用データ保存配列
+    let dataHistory = []; 
+    const maxDataPoints = 50; // グラフに表示するデータの個数
 
     function setup() {
-      noCanvas();
+      noCanvas(); // p5.jsのキャンバスは作らない
       myBLE = new p5ble();
       const connectBtn = select("#connectBtn");
       if (connectBtn) connectBtn.mousePressed(connectToBle);
+      
+      // グラフ初期描画（枠線などを描く）
+      drawGraph();
     }
 
     function connectToBle() {
@@ -71,7 +87,7 @@
       for (let i = 0; i < characteristics.length; i++) {
         if (characteristics[i].uuid.toLowerCase() == targetUuid.toLowerCase()) {
           myCharacteristic = characteristics[i];
-          setInterval(readDataLoop, 500);
+          setInterval(readDataLoop, 500); // 0.5秒ごとに更新
           break;
         }
       }
@@ -87,30 +103,88 @@
       if (error || !data) return;
       let values = String(data).split(',');
       if (values.length >= 2) {
-        // 文字列を数値に変換（計算用）
         let voltage = parseFloat(values[0]);
         let current = parseFloat(values[1]);
 
-        // 1. 電圧・電流の表示更新
+        // --- ARテキスト更新 ---
         let voltEl = document.querySelectorAll('#voltText');
         voltEl.forEach(el => el.setAttribute('value', voltage + " V"));
         
         let currEl = document.querySelectorAll('#currText');
         currEl.forEach(el => el.setAttribute('value', current + " A"));
 
-        // 2. ★オームの法則計算 (R = V / I)
+        // オームの法則計算
         let resistanceText = "---";
-        if (current > 0.0001) { // 0で割るのを防ぐ
-            // V / I を計算し、小数点以下1桁にする
+        if (current > 0.0001) {
             let resistance = voltage / current;
             resistanceText = resistance.toFixed(1) + " ohm";
         } else {
-            resistanceText = "INF"; // 電流が0の時は無限大(INF)
+            resistanceText = "INF";
         }
-
-        // 3. 抵抗値の表示更新
         let resEl = document.querySelectorAll('#resText');
         resEl.forEach(el => el.setAttribute('value', "R: " + resistanceText));
+
+        // --- グラフデータの更新 ---
+        dataHistory.push({ v: voltage, c: current });
+        if (dataHistory.length > maxDataPoints) {
+          dataHistory.shift(); // 古いデータを捨てる
+        }
+        drawGraph(); // グラフ再描画
+      }
+    }
+
+    // Canvasにグラフを描く関数
+    function drawGraph() {
+      const canvas = document.getElementById('graphCanvas');
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // 背景をクリア（半透明の黒）
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      ctx.fillRect(0, 0, w, h);
+
+      // 枠線
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(10, 10, w - 20, h - 20);
+
+      if (dataHistory.length < 2) return;
+
+      // スケール計算（グラフの最大値を決める）
+      // 電圧は最大3.3Vくらい、電流は小さいので適当に倍率を変える
+      const maxVolt = 3.5; 
+      const maxCurr = 0.5; // 0.5Aを最大とする
+
+      // --- 電圧の線（赤）を描く ---
+      ctx.beginPath();
+      ctx.strokeStyle = '#FF3B30'; // 赤
+      ctx.lineWidth = 3;
+      for (let i = 0; i < dataHistory.length; i++) {
+        let x = 10 + (i / (maxDataPoints - 1)) * (w - 20);
+        let y = h - 10 - (dataHistory[i].v / maxVolt) * (h - 20);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // --- 電流の線（青）を描く ---
+      ctx.beginPath();
+      ctx.strokeStyle = '#007AFF'; // 青
+      ctx.lineWidth = 3;
+      for (let i = 0; i < dataHistory.length; i++) {
+        let x = 10 + (i / (maxDataPoints - 1)) * (w - 20);
+        let y = h - 10 - (dataHistory[i].c / maxCurr) * (h - 20);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // --- テクスチャの更新を通知 ---
+      // これをやらないとA-Frame上の画像が変わらない
+      const plane = document.querySelector('#graphPlane');
+      if (plane && plane.getObject3D('mesh') && plane.getObject3D('mesh').material.map) {
+        plane.getObject3D('mesh').material.map.needsUpdate = true;
       }
     }
   </script>
