@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>AR Interactive Monitor</title>
+  <title>AR Dynamic Circuit</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <script src="https://unpkg.com/p5ble@0.0.7/dist/p5.ble.js"></script>
@@ -12,18 +12,13 @@
 
   <style>
     body { margin: 0; overflow: hidden; font-family: sans-serif; }
-    
-    /* === 左上のUIエリア (HUD) === */
     #hud {
       position: absolute; top: 10px; left: 10px; z-index: 1000;
       background: rgba(0, 0, 0, 0.6); padding: 10px; border-radius: 8px; color: white; pointer-events: none;
     }
     #status { font-size: 14px; margin-bottom: 5px; font-weight: bold; }
-    .status-ok { color: #00FF00; }
-    .status-ng { color: #FF3B30; }
+    .status-ok { color: #00FF00; } .status-ng { color: #FF3B30; }
     #graphCanvas { background: rgba(0, 0, 0, 0.3); border: 1px solid #888; display: block; }
-    
-    /* === 中央下の接続ボタン === */
     #connectBtn {
       position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
       padding: 12px 25px; font-size: 16px; font-weight: bold; color: white;
@@ -31,8 +26,6 @@
       z-index: 2000; pointer-events: auto; cursor: pointer;
       box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
-
-    /* === 左下の操作ボタンエリア === */
     #controls {
       position: absolute; bottom: 20px; left: 10px; z-index: 2000;
       display: flex; gap: 10px; pointer-events: auto;
@@ -42,18 +35,67 @@
       background-color: #333; border: 2px solid #555; border-radius: 8px;
       cursor: pointer; transition: background 0.3s;
     }
-    .toggle-btn.active {
-      background-color: #34C759; /* ONのときは緑 */
-      border-color: #34C759;
-    }
+    .toggle-btn.active { background-color: #34C759; border-color: #34C759; }
   </style>
+
+  <script>
+    AFRAME.registerComponent('circuit-drawer', {
+      init: function () {
+        // 3つの導線（細い赤い円柱）を作成してシーンに追加
+        this.wires = [];
+        for (let i = 0; i < 3; i++) {
+          let wire = document.createElement('a-cylinder');
+          wire.setAttribute('color', '#FF0000'); // 赤色
+          wire.setAttribute('radius', '0.005');  // 細さ
+          wire.setAttribute('visible', 'false'); // 最初は非表示
+          this.el.sceneEl.appendChild(wire);
+          this.wires.push(wire);
+        }
+        // 各マーカー要素を取得
+        this.m6 = document.querySelector('#marker-batt');
+        this.m0 = document.querySelector('#marker-res');
+        this.m1 = document.querySelector('#marker-led');
+      },
+      tick: function () {
+        // マーカーが全て認識されているかチェック
+        if (!this.m6 || !this.m0 || !this.m1 || 
+            !this.m6.object3D.visible || !this.m0.object3D.visible || !this.m1.object3D.visible) {
+          // 認識されていないマーカーがあれば線を隠す
+          this.wires.forEach(w => w.setAttribute('visible', 'false'));
+          return;
+        }
+
+        // 各マーカーの世界座標を取得
+        let p6 = new THREE.Vector3(); this.m6.object3D.getWorldPosition(p6);
+        let p0 = new THREE.Vector3(); this.m0.object3D.getWorldPosition(p0);
+        let p1 = new THREE.Vector3(); this.m1.object3D.getWorldPosition(p1);
+        // 少し浮かせる
+        p6.y += 0.02; p0.y += 0.02; p1.y += 0.02;
+
+        // 3本の線を引く関数を呼び出す
+        this.updateWire(this.wires[0], p6, p0); // 電池 -> 抵抗
+        this.updateWire(this.wires[1], p0, p1); // 抵抗 -> LED
+        this.updateWire(this.wires[2], p1, p6); // LED -> 電池に戻る
+      },
+      updateWire: function (wire, start, end) {
+        wire.setAttribute('visible', 'true');
+        // 2点間の距離（円柱の高さ）
+        let distance = start.distanceTo(end);
+        wire.setAttribute('height', distance);
+        // 2点間の中点（円柱の位置）
+        let midpoint = start.clone().lerp(end, 0.5);
+        wire.setAttribute('position', midpoint);
+        // 向きを合わせる
+        wire.object3D.lookAt(end);
+        wire.object3D.rotateX(Math.PI / 2); // 寝かせる
+      }
+    });
+  </script>
 </head>
 
 <body>
   <button id="connectBtn">Connect ESP32</button>
-
   <div id="controls">
-    <button id="btnFlow" class="toggle-btn active" onclick="toggleFlow()">Current Flow: ON</button>
     <button id="btnInfo" class="toggle-btn active" onclick="toggleInfo()">Values: ON</button>
   </div>
 
@@ -63,39 +105,26 @@
     <div style="font-size:10px; color:#ccc; margin-top:2px;">Red: Voltage / Blue: Current</div>
   </div>
 
-  <a-scene embedded arjs='sourceType: webcam; detectionMode: mono_and_matrix; matrixCodeType: 3x3; debugUIEnabled: false;'>
+  <a-scene embedded arjs='sourceType: webcam; detectionMode: mono_and_matrix; matrixCodeType: 3x3; debugUIEnabled: false;' circuit-drawer>
     
-    <a-marker type='barcode' value='6'>
+    <a-marker id="marker-batt" type='barcode' value='6'>
        <a-entity id="batteryInfo">
-         <a-text value="Battery / Power" color="cyan" position="0 0.1 -0.5" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+         <a-text value="Battery" color="cyan" position="0 0.1 -0.5" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
          <a-box position="0 0.1 0" scale="0.5 0.2 0.8" color="#333"></a-box> 
          <a-text value="+" color="red" position="0.3 0.21 0" rotation="-90 0 0" scale="2 2 2"></a-text>
          <a-text value="-" color="blue" position="-0.3 0.21 0" rotation="-90 0 0" scale="2 2 2"></a-text>
        </a-entity>
     </a-marker>
 
-    <a-marker type='barcode' value='0'>
+    <a-marker id="marker-res" type='barcode' value='0'>
        <a-entity id="resistorInfo">
          <a-text value="Resistor" color="yellow" position="0 0.02 -0.6" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
          <a-text id="currText" value="--- mA" color="yellow" position="0 0.02 0" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
          <a-text id="resText" value="R: ---" color="#00FF00" position="0 0.02 0.6" rotation="-90 0 0" align="center" scale="2.5 2.5 2.5"></a-text>
        </a-entity>
+       </a-marker>
 
-       <a-entity id="electronFlow" visible="false">
-           <a-sphere color="yellow" radius="0.02" position="0 0.02 0">
-             <a-animation attribute="position" from="0 0.02 0" to="-0.3 0.02 0" dur="2000" repeat="indefinite" easing="linear"></a-animation>
-           </a-sphere>
-           <a-sphere color="yellow" radius="0.02" position="0 0.02 0">
-             <a-animation attribute="position" from="0 0.02 0" to="-0.3 0.02 0" dur="2000" delay="666" repeat="indefinite" easing="linear"></a-animation>
-           </a-sphere>
-           <a-sphere color="yellow" radius="0.02" position="0 0.02 0">
-             <a-animation attribute="position" from="0 0.02 0" to="-0.3 0.02 0" dur="2000" delay="1333" repeat="indefinite" easing="linear"></a-animation>
-           </a-sphere>
-       </a-entity>
-    </a-marker>
-
-
-    <a-marker type='barcode' value='1'>
+    <a-marker id="marker-led" type='barcode' value='1'>
        <a-entity id="ledInfo">
          <a-text value="LED" color="white" position="0 0.02 -0.3" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
          <a-text id="voltText" value="--- V" color="#FF3B30" position="0 0.02 0.3" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
@@ -110,9 +139,7 @@
     const targetUuid  = "BEB5483E-36E1-4688-B7F5-EA07361B26A8";
     let myBLE, myCharacteristic;
     let dataHistory = []; const maxDataPoints = 100;
-
-    // 表示モード管理フラグ
-    let showFlow = true;
+    // let showFlow = true; // アニメーション用フラグは一旦未使用
     let showInfo = true;
 
     function setup() {
@@ -123,33 +150,16 @@
       drawGraph();
     }
 
-    // === ボタン操作用関数 ===
-    function toggleFlow() {
-      showFlow = !showFlow;
-      const btn = document.getElementById('btnFlow');
-      const flowEntity = document.querySelector('#electronFlow');
-      
-      if (showFlow) {
-        btn.classList.add('active');
-        btn.innerText = "Current Flow: ON";
-        if (flowEntity) flowEntity.setAttribute('visible', 'true');
-      } else {
-        btn.classList.remove('active');
-        btn.innerText = "Current Flow: OFF";
-        if (flowEntity) flowEntity.setAttribute('visible', 'false');
-      }
-    }
+    // toggleFlow関数は一旦削除
 
     function toggleInfo() {
       showInfo = !showInfo;
       const btn = document.getElementById('btnInfo');
-      // 表示/非表示を切り替えるエンティティたち
       const entities = [
         document.querySelector('#resistorInfo'),
         document.querySelector('#ledInfo'),
         document.querySelector('#batteryInfo')
       ];
-
       if (showInfo) {
         btn.classList.add('active');
         btn.innerText = "Values: ON";
@@ -194,40 +204,18 @@
       let values = String(data).split(',');
       if (values.length >= 2) {
         let rawVoltage = parseFloat(values[0]);
-        let rawCurrent = parseFloat(values[1]); // 生の電流値(A)
-
-        // --- 値の更新 ---
+        let rawCurrent = parseFloat(values[1]);
         let current_mA = (rawCurrent * 1000).toFixed(2);
-        
-        // 値の表示更新 (表示モードがOFFでも属性自体は更新しておく)
         document.querySelectorAll('#voltText').forEach(el => el.setAttribute('value', rawVoltage + " V"));
         document.querySelectorAll('#currText').forEach(el => el.setAttribute('value', current_mA + " mA"));
-
-        // --- 抵抗値の計算と単位変換 ---
         let resistanceText = "---";
         if (rawCurrent > 0.00001) { 
             let R = rawVoltage / rawCurrent;
-            // 1000オーム以上なら kΩ 表示にする
-            if (R >= 1000) {
-                resistanceText = (R / 1000).toFixed(2) + " k-ohm";
-            } else {
-                resistanceText = R.toFixed(0) + " ohm";
-            }
-        } else {
-            resistanceText = "OPEN"; // 電流0なら開放(無限大)
-        }
+            if (R >= 1000) { resistanceText = (R / 1000).toFixed(2) + " k-ohm"; } else { resistanceText = R.toFixed(0) + " ohm"; }
+        } else { resistanceText = "OPEN"; }
         document.querySelectorAll('#resText').forEach(el => el.setAttribute('value', "R: " + resistanceText));
-
-        // --- アニメーション制御 ---
-        // 「ボタンがON」かつ「電流が流れている」ときだけ表示
-        const flowEntity = document.querySelector('#electronFlow');
-        if (flowEntity) {
-            if (showFlow && rawCurrent > 0.0001) {
-                flowEntity.setAttribute('visible', 'true');
-            } else {
-                flowEntity.setAttribute('visible', 'false');
-            }
-        }
+        
+        // アニメーション制御は一旦削除
 
         dataHistory.push({ v: rawVoltage, c: rawCurrent });
         if (dataHistory.length > maxDataPoints) dataHistory.shift();
@@ -240,25 +228,17 @@
       const ctx = canvas.getContext('2d');
       const w = canvas.width; const h = canvas.height;
       ctx.clearRect(0, 0, w, h);
-      
-      // グリッド線
       ctx.strokeStyle = '#555'; ctx.lineWidth = 1; ctx.beginPath();
       for(let i=1; i<4; i++) { let y = (h / 4) * i; ctx.moveTo(0, y); ctx.lineTo(w, y); }
       ctx.stroke();
-
       if (dataHistory.length < 2) return;
-      const maxVolt = 3.5; 
-      const maxCurr = 0.02; // 20mAフルスケール
-
-      // Voltage (Red)
+      const maxVolt = 3.5; const maxCurr = 0.02;
       ctx.beginPath(); ctx.strokeStyle = '#FF3B30'; ctx.lineWidth = 2;
       for (let i = 0; i < dataHistory.length; i++) {
         let x = (i / (maxDataPoints - 1)) * w; let y = h - (dataHistory[i].v / maxVolt) * h;
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.stroke();
-
-      // Current (Blue)
       ctx.beginPath(); ctx.strokeStyle = '#007AFF'; ctx.lineWidth = 2;
       for (let i = 0; i < dataHistory.length; i++) {
         let x = (i / (maxDataPoints - 1)) * w;
