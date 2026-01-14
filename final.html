@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>AR HUD Monitor</title>
+  <title>AR Flow Anim (Step1)</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <script src="https://unpkg.com/p5ble@0.0.7/dist/p5.ble.js"></script>
@@ -12,43 +12,19 @@
 
   <style>
     body { margin: 0; overflow: hidden; font-family: sans-serif; }
-    
-    /* === 左上のUIエリア (HUD) === */
     #hud {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1000; /* ARより手前に表示 */
-      background: rgba(0, 0, 0, 0.6); /* 半透明の黒背景 */
-      padding: 10px;
-      border-radius: 8px;
-      color: white;
-      pointer-events: none; /* UIの下の3D操作を邪魔しない */
+      position: absolute; top: 10px; left: 10px; z-index: 1000;
+      background: rgba(0, 0, 0, 0.6); padding: 10px; border-radius: 8px; color: white; pointer-events: none;
     }
-
-    #status {
-      font-size: 14px;
-      margin-bottom: 5px;
-      font-weight: bold;
-    }
+    #status { font-size: 14px; margin-bottom: 5px; font-weight: bold; }
     .status-ok { color: #00FF00; }
     .status-ng { color: #FF3B30; }
-
-    /* グラフキャンバス（画面に直接表示） */
-    #graphCanvas {
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid #888;
-      display: block; /* 常に表示 */
-    }
-
-    /* 接続ボタン（中央下） */
+    #graphCanvas { background: rgba(0, 0, 0, 0.3); border: 1px solid #888; display: block; }
     #connectBtn {
       position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
       padding: 15px 30px; font-size: 18px; font-weight: bold; color: white;
       background-color: #007AFF; border: none; border-radius: 30px;
-      z-index: 2000;
-      pointer-events: auto;
-      cursor: pointer;
+      z-index: 2000; pointer-events: auto; cursor: pointer;
     }
   </style>
 </head>
@@ -71,11 +47,20 @@
 
     <a-marker type='barcode' value='0'>
        <a-text value="Resistor" color="yellow" position="0 0.02 -0.6" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
-       
        <a-text id="currText" value="--- mA" color="yellow" position="0 0.02 0" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
-
        <a-text id="resText" value="R: --- ohm" color="#00FF00" position="0 0.02 0.6" rotation="-90 0 0" align="center" scale="2.5 2.5 2.5"></a-text>
-    </a-marker>
+
+       <a-entity id="electronFlow" visible="false"> <a-sphere color="yellow" radius="0.015" position="0 0.02 0">
+             <a-animation attribute="position" from="0 0.02 0" to="-0.15 0.02 0" dur="2000" repeat="indefinite" easing="linear"></a-animation>
+           </a-sphere>
+           <a-sphere color="yellow" radius="0.015" position="0 0.02 0">
+             <a-animation attribute="position" from="0 0.02 0" to="-0.15 0.02 0" dur="2000" delay="666" repeat="indefinite" easing="linear"></a-animation>
+           </a-sphere>
+           <a-sphere color="yellow" radius="0.015" position="0 0.02 0">
+             <a-animation attribute="position" from="0 0.02 0" to="-0.15 0.02 0" dur="2000" delay="1333" repeat="indefinite" easing="linear"></a-animation>
+           </a-sphere>
+       </a-entity>
+       </a-marker>
 
 
     <a-marker type='barcode' value='1'>
@@ -90,18 +75,13 @@
     const serviceUuid = "4FAF0001-A428-4034-B095-81E5B9420000";
     const targetUuid  = "BEB5483E-36E1-4688-B7F5-EA07361B26A8";
     let myBLE, myCharacteristic;
-    
-    let dataHistory = []; 
-    const maxDataPoints = 100; // グラフの横幅に合わせてデータ数を増やす
+    let dataHistory = []; const maxDataPoints = 100;
 
     function setup() {
       noCanvas();
       myBLE = new p5ble();
-      
       const connectBtn = select("#connectBtn");
       if (connectBtn) connectBtn.mousePressed(connectToBle);
-      
-      // グラフの初期描画（空のグリッド線など）
       drawGraph();
     }
 
@@ -110,17 +90,11 @@
     }
 
     function gotCharacteristics(error, characteristics) {
-      if (error) {
-        console.error(error);
-        return;
-      }
-      
-      // 接続成功時のUI更新
+      if (error) { console.error(error); return; }
       select("#connectBtn").hide();
       const statusText = select("#statusText");
       statusText.html("Connected");
       statusText.class("status-ok");
-
       for (let i = 0; i < characteristics.length; i++) {
         if (characteristics[i].uuid.toLowerCase() == targetUuid.toLowerCase()) {
           myCharacteristic = characteristics[i];
@@ -134,12 +108,8 @@
       if (myBLE.isConnected() && myCharacteristic) {
         myBLE.read(myCharacteristic, 'string', handleData);
       } else {
-        // 切断された場合のUI更新
         const statusText = select("#statusText");
-        if(statusText) {
-            statusText.html("Disconnected");
-            statusText.class("status-ng");
-        }
+        if(statusText) { statusText.html("Disconnected"); statusText.class("status-ng"); }
       }
     }
 
@@ -148,36 +118,35 @@
       let values = String(data).split(',');
       if (values.length >= 2) {
         let rawVoltage = parseFloat(values[0]);
-        let rawCurrent = parseFloat(values[1]); // 生の電流値(A)
+        let rawCurrent = parseFloat(values[1]);
 
-        // --- 1. 電流値の表示精度を上げる (mA変換) ---
-        // 小数点第2位まで表示する (例: 0.05 mA)
-        // これで微小な電流も「0」にならず表示されます
         let current_mA = (rawCurrent * 1000).toFixed(2);
+        document.querySelectorAll('#voltText').forEach(el => el.setAttribute('value', rawVoltage + " V"));
+        document.querySelectorAll('#currText').forEach(el => el.setAttribute('value', current_mA + " mA"));
 
-        let voltEl = document.querySelectorAll('#voltText');
-        voltEl.forEach(el => el.setAttribute('value', rawVoltage + " V"));
-        
-        let currEl = document.querySelectorAll('#currText');
-        currEl.forEach(el => el.setAttribute('value', current_mA + " mA"));
-
-        // --- 2. オームの法則計算 ---
         let resistanceText = "---";
-        // 計算不能なほど小さい電流(0.00001A以下)を除外
         if (rawCurrent > 0.00001) { 
             let resistance = rawVoltage / rawCurrent;
             resistanceText = resistance.toFixed(0) + " ohm";
         } else {
             resistanceText = "MAX";
         }
-        let resEl = document.querySelectorAll('#resText');
-        resEl.forEach(el => el.setAttribute('value', "R: " + resistanceText));
+        document.querySelectorAll('#resText').forEach(el => el.setAttribute('value', "R: " + resistanceText));
 
-        // --- 3. グラフ更新 ---
-        dataHistory.push({ v: rawVoltage, c: rawCurrent });
-        if (dataHistory.length > maxDataPoints) {
-          dataHistory.shift();
+        // ★★★ アニメーションの制御（ON/OFF） ★★★
+        const flowEntity = document.querySelector('#electronFlow');
+        if (flowEntity) {
+            // 電流が少しでも流れていれば表示する
+            if (rawCurrent > 0.0001) { // 0.1mA以上
+                flowEntity.setAttribute('visible', 'true');
+            } else {
+                flowEntity.setAttribute('visible', 'false');
+            }
         }
+        // ★★★★★★★★★★★★★★★★★★★★★
+
+        dataHistory.push({ v: rawVoltage, c: rawCurrent });
+        if (dataHistory.length > maxDataPoints) dataHistory.shift();
         drawGraph();
       }
     }
@@ -185,60 +154,25 @@
     function drawGraph() {
       const canvas = document.getElementById('graphCanvas');
       const ctx = canvas.getContext('2d');
-      const w = canvas.width;
-      const h = canvas.height;
-
-      // クリア
+      const w = canvas.width; const h = canvas.height;
       ctx.clearRect(0, 0, w, h);
-
-      // グリッド線
-      ctx.strokeStyle = '#444';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      // 横線(3本)
-      for(let i=1; i<4; i++) {
-        let y = (h / 4) * i;
-        ctx.moveTo(0, y);
-        ctx.lineTo(w, y);
-      }
+      ctx.strokeStyle = '#444'; ctx.lineWidth = 1; ctx.beginPath();
+      for(let i=1; i<4; i++) { let y = (h / 4) * i; ctx.moveTo(0, y); ctx.lineTo(w, y); }
       ctx.stroke();
-
       if (dataHistory.length < 2) return;
-
-      // --- スケール設定 (ここを調整して見やすくします) ---
-      const maxVolt = 3.5;  // 3.5Vフルスケール
-      
-      // 電流のスケール: 生の値(A)を使うので注意
-      // 20mA (0.02A) をグラフの天井に設定します。
-      // もしグラフがはみ出すなら 0.05 (50mA) にしてください。
-      const maxCurr = 0.02; 
-
-      // 電圧（赤線）
-      ctx.beginPath();
-      ctx.strokeStyle = '#FF3B30';
-      ctx.lineWidth = 2;
+      const maxVolt = 3.5; const maxCurr = 0.02; 
+      ctx.beginPath(); ctx.strokeStyle = '#FF3B30'; ctx.lineWidth = 2;
       for (let i = 0; i < dataHistory.length; i++) {
-        let x = (i / (maxDataPoints - 1)) * w;
-        let y = h - (dataHistory[i].v / maxVolt) * h;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        let x = (i / (maxDataPoints - 1)) * w; let y = h - (dataHistory[i].v / maxVolt) * h;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.stroke();
-
-      // 電流（青線）
-      ctx.beginPath();
-      ctx.strokeStyle = '#007AFF'; // 鮮やかな青
-      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.strokeStyle = '#007AFF'; ctx.lineWidth = 2;
       for (let i = 0; i < dataHistory.length; i++) {
         let x = (i / (maxDataPoints - 1)) * w;
-        
-        // 値をグラフ内に収める処理
-        let val = dataHistory[i].c;
-        if (val > maxCurr) val = maxCurr;
-        
+        let val = dataHistory[i].c; if (val > maxCurr) val = maxCurr;
         let y = h - (val / maxCurr) * h;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.stroke();
     }
