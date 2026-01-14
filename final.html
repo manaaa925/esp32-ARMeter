@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>AR Graph Monitor (mA)</title>
+  <title>AR Graph Monitor (Boosted)</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <script src="https://unpkg.com/p5ble@0.0.7/dist/p5.ble.js"></script>
@@ -59,6 +59,9 @@
     const targetUuid  = "BEB5483E-36E1-4688-B7F5-EA07361B26A8";
     let myBLE, myCharacteristic;
     
+    // ★設定エリア：電流を何倍に見せるか？
+    const CURRENT_GAIN = 10; // 10倍にして表示（ここを変えれば調整可能）
+
     let dataHistory = []; 
     const maxDataPoints = 50; 
 
@@ -96,32 +99,37 @@
       if (error || !data) return;
       let values = String(data).split(',');
       if (values.length >= 2) {
-        let voltage = parseFloat(values[0]);
-        let current = parseFloat(values[1]); // 生データ(A)
+        let rawVoltage = parseFloat(values[0]);
+        let rawCurrent = parseFloat(values[1]); // 生の電流値
 
-        // --- 1. 表示の更新 (mAに変換) ---
-        // Aを1000倍してmAにし、小数点第1位まで表示
-        let current_mA = (current * 1000).toFixed(1);
+        // --- ★魔法のスパイス（増幅処理） ---
+        // 実際の電流値を10倍などにして「仮想の電流値」を作る
+        let displayCurrent = rawCurrent * CURRENT_GAIN;
+
+        // mAに変換して表示
+        let current_mA = (displayCurrent * 1000).toFixed(1);
 
         let voltEl = document.querySelectorAll('#voltText');
-        voltEl.forEach(el => el.setAttribute('value', voltage + " V"));
+        voltEl.forEach(el => el.setAttribute('value', rawVoltage + " V"));
         
         let currEl = document.querySelectorAll('#currText');
         currEl.forEach(el => el.setAttribute('value', current_mA + " mA"));
 
-        // --- 2. オームの法則 (計算はAのままで行う) ---
+        // --- オームの法則計算 ---
+        // 増幅後の電流値を使って計算することで、物理的な矛盾（V=IR）を無くす
         let resistanceText = "---";
-        if (current > 0.0001) { 
-            let resistance = voltage / current;
-            resistanceText = resistance.toFixed(1) + " ohm";
+        if (displayCurrent > 0.00001) { 
+            let resistance = rawVoltage / displayCurrent;
+            // 抵抗値が大きくなりすぎないよう整数表示にするなど調整
+            resistanceText = resistance.toFixed(0) + " ohm";
         } else {
-            resistanceText = "INF";
+            resistanceText = "MAX";
         }
         let resEl = document.querySelectorAll('#resText');
         resEl.forEach(el => el.setAttribute('value', "R: " + resistanceText));
 
-        // --- 3. グラフ更新 ---
-        dataHistory.push({ v: voltage, c: current });
+        // --- グラフ更新 ---
+        dataHistory.push({ v: rawVoltage, c: displayCurrent });
         if (dataHistory.length > maxDataPoints) {
           dataHistory.shift();
         }
@@ -135,7 +143,6 @@
       const w = canvas.width;
       const h = canvas.height;
 
-      // 背景
       ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
       ctx.fillRect(0, 0, w, h);
       ctx.strokeStyle = '#FFFFFF';
@@ -144,12 +151,12 @@
 
       if (dataHistory.length < 2) return;
 
-      // --- ★設定変更エリア★ ---
-      const maxVolt = 3.5;  // 電圧グラフの最大値 (3.5V)
-      const maxCurr = 0.05; // 電流グラフの最大値 (0.05A = 50mA)
-      // もしグラフがはみ出すなら、ここを0.1など大きくしてください
-      // 逆に小さすぎたら、0.02などに減らしてください
-      // ----------------------
+      // --- グラフのスケール設定 ---
+      const maxVolt = 3.5;  
+      
+      // 増幅後の値が0.1A (100mA) くらいまで行くと想定
+      // もしグラフがはみ出すならここを 0.2 などに増やしてください
+      const maxCurr = 0.1; 
 
       // 電圧（赤）
       ctx.beginPath();
@@ -169,11 +176,8 @@
       ctx.lineWidth = 3;
       for (let i = 0; i < dataHistory.length; i++) {
         let x = 10 + (i / (maxDataPoints - 1)) * (w - 20);
-        
-        // グラフ描画時は、生データ(A)と最大値(maxCurr)で計算
-        // clamp処理（グラフからはみ出ないようにする）
         let val = dataHistory[i].c;
-        if (val > maxCurr) val = maxCurr;
+        if (val > maxCurr) val = maxCurr; // はみ出し防止
         
         let y = h - 10 - (val / maxCurr) * (h - 20);
         if (i === 0) ctx.moveTo(x, y);
@@ -181,7 +185,6 @@
       }
       ctx.stroke();
 
-      // テクスチャ更新通知
       const plane = document.querySelector('#graphPlane');
       if (plane && plane.getObject3D('mesh') && plane.getObject3D('mesh').material.map) {
         plane.getObject3D('mesh').material.map.needsUpdate = true;
