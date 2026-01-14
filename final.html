@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>AR Proportional Density</title>
+  <title>AR Circuit Monitor - Thesis Final Ver.</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <script src="https://unpkg.com/p5ble@0.0.7/dist/p5.ble.js"></script>
@@ -11,15 +11,25 @@
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
   <style>
-    body { margin: 0; overflow: hidden; font-family: sans-serif; }
+    /* 基本スタイルの定義 */
+    body { margin: 0; overflow: hidden; font-family: "Helvetica Neue", Arial, sans-serif; }
+    
+    /* ヘッドアップディスプレイ (HUD) - 画面左上のステータス・グラフ表示領域 */
     #hud {
       position: absolute; top: 10px; left: 10px; z-index: 1000;
-      background: rgba(0, 0, 0, 0.6); padding: 10px; border-radius: 8px; color: white; pointer-events: none;
+      background: rgba(0, 0, 0, 0.6); /* 視認性向上のための半透明背景 */
+      padding: 10px; border-radius: 8px; color: white; pointer-events: none;
     }
     #status { font-size: 14px; margin-bottom: 5px; font-weight: bold; }
-    .status-ok { color: #00FF00; } .status-ng { color: #FF3B30; }
+    .status-ok { color: #00FF00; } /* 接続成功時: 緑 */
+    .status-ng { color: #FF3B30; } /* 未接続時: 赤 */
+    
     #graphCanvas { background: rgba(0, 0, 0, 0.3); border: 1px solid #888; display: block; }
+    
+    /* AR用の回路記号テクスチャ生成用キャンバス (画面には表示しない) */
     .symbol-canvas { display: none; }
+
+    /* BLE接続ボタン */
     #connectBtn {
       position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
       padding: 12px 25px; font-size: 16px; font-weight: bold; color: white;
@@ -27,6 +37,8 @@
       z-index: 2000; pointer-events: auto; cursor: pointer;
       box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
+
+    /* 操作用トグルボタン群 */
     #controls {
       position: absolute; bottom: 20px; left: 10px; z-index: 2000;
       display: flex; gap: 10px; pointer-events: auto;
@@ -40,11 +52,18 @@
   </style>
 
   <script>
-    window.currentValueGlobal = 0.0;
-    window.voltageValueGlobal = 0.0;
-    window.showFlowGlobal = true;
+    /* ================================================================================
+       グローバル変数定義
+       - 異なるコンポーネント間（AR描画とBLE通信）でデータを共有するために使用
+       ================================================================================ */
+    window.currentValueGlobal = 0.0; // 現在の電流値 (単位: A)
+    window.voltageValueGlobal = 0.0; // 現在の電圧値 (単位: V)
+    window.showFlowGlobal = true;    // 回路・粒子アニメーションの表示フラグ
 
-    // 回路図画像更新用コンポーネント
+    /* * コンポーネント: canvas-updater
+     * 概要: Canvasに描画した回路記号をA-Frameのテクスチャとして反映させるための処理
+     * 補足: WebGLの仕様上、動的に生成したテクスチャは明示的な更新フラグ(needsUpdate)が必要
+     */
     AFRAME.registerComponent('canvas-updater', {
       init: function() {
         this.el.sceneEl.addEventListener('loaded', () => {
@@ -53,6 +72,7 @@
             const el = document.querySelector(id);
             if(el) el.needsUpdate = true;
           });
+          // 一部の端末(iOS等)での描画遅延対策
           setTimeout(() => {
              document.querySelectorAll('a-plane[material]').forEach(plane => {
                  if(plane.getObject3D('mesh').material.map) {
@@ -64,23 +84,32 @@
       }
     });
 
+    /* * コンポーネント: circuit-animator
+     * 概要: マーカー間の導線描画および電子流（粒子）アニメーションの制御
+     * アルゴリズム:
+     * 1. 3つのマーカー位置を取得し、各区間を結ぶシリンダー(導線)を描画
+     * 2. 電流値に応じて粒子の表示密度を動的に変更 (Proportional Density Logic)
+     */
     AFRAME.registerComponent('circuit-animator', {
       init: function () {
-        this.wires = [];
-        this.particles = [];
-        this.timeOffset = 0;
+        this.wires = [];     // 導線オブジェクト管理用配列
+        this.particles = []; // 粒子オブジェクト管理用配列
+        this.timeOffset = 0; // アニメーション進行用タイムカウンタ
         
-        // ★粒の最大数: 30個に増量 (滑らかな密度変化のため)
+        // 1区間あたりの最大粒子数（密度表現の解像度に関わる）
         const MAX_PARTICLES = 30;
 
+        // 3つの区間 (Bat->Res, Res->LED, LED->Bat) のオブジェクトを初期化
         for (let i = 0; i < 3; i++) {
+          // 導線 (赤い円柱)
           let wire = document.createElement('a-cylinder');
           wire.setAttribute('color', '#FF0000');
-          wire.setAttribute('radius', '0.02');
+          wire.setAttribute('radius', '0.02'); // 視認性を考慮した太さ
           wire.setAttribute('visible', 'false');
           this.el.sceneEl.appendChild(wire);
           this.wires.push(wire);
 
+          // 電子流粒子 (黄色い球体)
           let segmentParticles = [];
           for(let j=0; j < MAX_PARTICLES; j++){
             let p = document.createElement('a-sphere');
@@ -88,10 +117,9 @@
             p.setAttribute('radius', '0.04');
             p.setAttribute('visible', 'false');
             
-            // ★重要: 各粒に「表示されやすさランク(0.0~1.0)」をランダムに割り振る
-            // これにより、電流が少ないときは「ランクが低い粒」だけが表示され、
-            // 全体として「まばら」に見えるようになる。
-            // 単純な乱数ではなく、黄金比を使って均等に分散させる
+            // 【重要】粒子の分散表示ロジック
+            // 各粒子に0.0〜1.0のランクを付与し、電流密度に応じて間引く。
+            // 黄金比(0.618...)を用いることで、ランダムかつ均等な分布を実現。
             p.densityRank = (j * 0.61803398875) % 1.0; 
             
             this.el.sceneEl.appendChild(p);
@@ -100,12 +128,14 @@
           this.particles.push(segmentParticles);
         }
 
+        // DOM要素の取得
         this.m6 = document.querySelector('#marker-batt');
         this.m0 = document.querySelector('#marker-res');
         this.m1 = document.querySelector('#marker-led');
       },
 
       tick: function (time, timeDelta) {
+        // 表示フラグOFF または マーカー未認識時は描画をスキップ
         if (!window.showFlowGlobal || !this.m6 || !this.m0 || !this.m1 || 
             !this.m6.object3D.visible || !this.m0.object3D.visible || !this.m1.object3D.visible) {
           this.wires.forEach(w => w.setAttribute('visible', 'false'));
@@ -113,35 +143,40 @@
           return;
         }
 
+        // 各マーカーの世界座標を取得 (少し浮かせて表示: y+=0.02)
         let p6 = new THREE.Vector3(); this.m6.object3D.getWorldPosition(p6); p6.y += 0.02;
         let p0 = new THREE.Vector3(); this.m0.object3D.getWorldPosition(p0); p0.y += 0.02;
         let p1 = new THREE.Vector3(); this.m1.object3D.getWorldPosition(p1); p1.y += 0.02;
 
-        // ★速度は一定（ゆっくり）
+        // アニメーション速度 (一定速度でゆっくり流す)
         this.timeOffset += 0.003; 
 
-        // ★密度の計算 (Proportional Density)
+        // --- 密度の計算 (Density Calculation) ---
         let I = window.currentValueGlobal; // 電流(A)
         let V = window.voltageValueGlobal; // 電圧(V)
 
-        // 基準: 20mA (0.02A) で密度100%とする
+        // 基準値: 20mA (0.02A) を密度100% (すべての粒を表示) とする
         let maxCurrentRef = 0.02; 
         let densityRatio = I / maxCurrentRef;
 
-        // 救済措置: 電流0でも電圧があれば、少し(5%)だけ表示する
+        // 【例外処理】電流計測値が0でも、電圧が印加されている場合の処理
+        // 計測限界以下の微小電流でも回路が成立していることを示すため、最低限(5%)の粒を表示
         if (densityRatio < 0.05 && V > 1.5) {
             densityRatio = 0.05; 
         }
 
-        // 1.0を超えないようにキャップ
+        // 表示率の上限キャップ
         if (densityRatio > 1.0) densityRatio = 1.0;
 
+        // 各区間の描画更新
         this.updateSegment(0, p6, p0, densityRatio);
         this.updateSegment(1, p0, p1, densityRatio);
         this.updateSegment(2, p1, p6, densityRatio);
       },
 
+      // 2点間の導線と粒子を描画・配置する関数
       updateSegment: function(index, start, end, densityRatio) {
+        // 導線の配置（位置・回転・長さ）
         let wire = this.wires[index];
         wire.setAttribute('visible', 'true');
         let dist = start.distanceTo(end);
@@ -149,18 +184,16 @@
         let mid = start.clone().lerp(end, 0.5);
         wire.setAttribute('position', mid);
         wire.object3D.lookAt(end);
-        wire.object3D.rotateX(Math.PI / 2);
+        wire.object3D.rotateX(Math.PI / 2); // CylinderはデフォルトでY軸向きのためX軸回転が必要
 
+        // 粒子の配置
         let parts = this.particles[index];
-        
         parts.forEach((p, i) => {
-            // ★分散表示ロジック
-            // この粒のランクが、現在の密度割合(densityRatio)以下なら表示する
-            // densityRatioが 0.1 なら、ランク0.1以下の粒(全体の10%)だけが表示される
+            // ランク判定による間引き処理
             if (p.densityRank < densityRatio) {
                 p.setAttribute('visible', 'true');
                 
-                // 位置計算 (全体に均等に散らばるように配置)
+                // 線形補間(lerp)による位置計算
                 let progress = (this.timeOffset + (i / parts.length)) % 1.0;
                 let pos = start.clone().lerp(end, progress);
                 p.setAttribute('position', pos);
@@ -191,6 +224,7 @@
   <canvas id="cv-res" class="symbol-canvas" width="256" height="256"></canvas>
   <canvas id="cv-led" class="symbol-canvas" width="256" height="256"></canvas>
 
+
   <a-scene embedded arjs='sourceType: webcam; detectionMode: mono_and_matrix; matrixCodeType: 3x3; debugUIEnabled: false;' circuit-animator canvas-updater>
     
     <a-assets>
@@ -208,8 +242,9 @@
     <a-marker id="marker-res" type='barcode' value='0'>
        <a-entity id="resistorInfo">
          <a-plane position="0 0.1 -0.5" rotation="-90 0 0" width="1" height="1" material="src: #cv-res; transparent:true; opacity: 1;"></a-plane>
-         <a-text id="currText" value="--- mA" color="yellow" position="0 0.02 0.3" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
-         <a-text id="resText" value="R: ---" color="#00FF00" position="0 0.02 0.6" rotation="-90 0 0" align="center" scale="2.5 2.5 2.5"></a-text>
+         
+         <a-text id="currText" value="--- mA" color="yellow" position="0 0.02 0.2" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
+         <a-text id="resText" value="R: ---" color="#00FF00" position="0 0.02 0.7" rotation="-90 0 0" align="center" scale="2.5 2.5 2.5"></a-text>
        </a-entity>
     </a-marker>
 
@@ -224,58 +259,71 @@
   </a-scene>
 
   <script>
+    // BLE UUID設定 (ESP32側の設定と一致させること)
     const serviceUuid = "4FAF0001-A428-4034-B095-81E5B9420000";
     const targetUuid  = "BEB5483E-36E1-4688-B7F5-EA07361B26A8";
+    
     let myBLE, myCharacteristic;
-    let dataHistory = []; const maxDataPoints = 100;
+    let dataHistory = []; 
+    const maxDataPoints = 100; // グラフの描画データ保持数
     let showInfo = true;
 
+    // 初期化処理
     function setup() {
-      noCanvas();
+      noCanvas(); // p5.jsのデフォルトキャンバスは使用しない
       myBLE = new p5ble();
+      
+      // BLE接続ボタンのイベントリスナ設定
       const connectBtn = select("#connectBtn");
       if (connectBtn) connectBtn.mousePressed(connectToBle);
       
-      drawGraph();
-      drawAllSymbols();
+      drawGraph();      // グラフ枠の初期描画
+      drawAllSymbols(); // 回路記号の初期生成
     }
 
+    /**
+     * Canvas APIを使用して回路記号を描画する関数
+     * 画像ファイルへの依存を排除し、環境非依存で動作させるために実装
+     */
     function drawAllSymbols() {
-      // 1. Battery
+      // 1. Battery (電池記号)
       let c = document.getElementById('cv-batt'); let ctx = c.getContext('2d');
       ctx.fillStyle = 'white'; ctx.fillRect(0,0,256,256);
       ctx.lineWidth = 10; ctx.strokeStyle = 'black'; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.moveTo(0, 128); ctx.lineTo(100, 128); ctx.stroke();
-      ctx.lineWidth = 15; ctx.beginPath(); ctx.moveTo(100, 60); ctx.lineTo(100, 196); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(156, 90); ctx.lineTo(156, 166); ctx.stroke();
+      ctx.lineWidth = 15; ctx.beginPath(); ctx.moveTo(100, 60); ctx.lineTo(100, 196); ctx.stroke(); // 長い線(+)
+      ctx.beginPath(); ctx.moveTo(156, 90); ctx.lineTo(156, 166); ctx.stroke(); // 短い線(-)
       ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(156, 128); ctx.lineTo(256, 128); ctx.stroke();
       ctx.fillStyle = 'black'; ctx.font = 'bold 40px Arial'; ctx.textAlign = 'center';
       ctx.fillText("Battery", 128, 40);
 
-      // 2. Variable Resistor (可変抵抗)
+      // 2. Variable Resistor (可変抵抗記号)
       c = document.getElementById('cv-res'); ctx = c.getContext('2d');
       ctx.fillStyle = 'white'; ctx.fillRect(0,0,256,256);
       ctx.lineWidth = 10; ctx.strokeStyle = 'black'; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      // ジグザグ線
       ctx.beginPath();
       ctx.moveTo(0, 128); ctx.lineTo(40, 128);
       ctx.lineTo(60, 80); ctx.lineTo(100, 176);
       ctx.lineTo(140, 80); ctx.lineTo(180, 176);
       ctx.lineTo(200, 128); ctx.lineTo(256, 128);
       ctx.stroke();
-      // 矢印
+      // 可変を示す矢印
       ctx.beginPath(); ctx.moveTo(80, 200); ctx.lineTo(180, 50); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(180, 50); ctx.lineTo(160, 60); ctx.moveTo(180, 50); ctx.lineTo(170, 80); ctx.stroke();
       ctx.fillStyle = 'black'; ctx.font = 'bold 35px Arial'; ctx.textAlign = 'center';
       ctx.fillText("Var. Resistor", 128, 40);
 
-      // 3. LED
+      // 3. LED (発光ダイオード記号)
       c = document.getElementById('cv-led'); ctx = c.getContext('2d');
       ctx.fillStyle = 'white'; ctx.fillRect(0,0,256,256);
       ctx.lineWidth = 8; ctx.strokeStyle = 'black';
+      // ダイオード部分
       ctx.beginPath(); ctx.moveTo(128, 170); ctx.lineTo(80, 90); ctx.lineTo(176, 90); ctx.closePath(); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(80, 170); ctx.lineTo(176, 170); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(128, 90); ctx.lineTo(128, 60); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(128, 170); ctx.lineTo(128, 200); ctx.stroke();
+      // 発光を示す矢印
       ctx.beginPath(); ctx.moveTo(180, 140); ctx.lineTo(220, 180); 
       ctx.moveTo(210, 180); ctx.lineTo(220, 180); ctx.lineTo(220, 170); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(190, 120); ctx.lineTo(230, 160);
@@ -284,6 +332,7 @@
       ctx.fillText("LED", 128, 40);
     }
 
+    // --- UI操作関数 ---
     function toggleFlow() {
       window.showFlowGlobal = !window.showFlowGlobal;
       const btn = document.getElementById('btnFlow');
@@ -311,6 +360,7 @@
       }
     }
 
+    // --- BLE通信処理 ---
     function connectToBle() {
       myBLE.connect(serviceUuid, gotCharacteristics);
     }
@@ -321,10 +371,12 @@
       const statusText = select("#statusText");
       statusText.html("Connected");
       statusText.class("status-ok");
+      
+      // 対象のCharacteristicを探してRead開始
       for (let i = 0; i < characteristics.length; i++) {
         if (characteristics[i].uuid.toLowerCase() == targetUuid.toLowerCase()) {
           myCharacteristic = characteristics[i];
-          setInterval(readDataLoop, 500);
+          setInterval(readDataLoop, 500); // 500ms周期でデータ取得
           break;
         }
       }
@@ -339,6 +391,10 @@
       }
     }
 
+    /**
+     * データ受信時のハンドラ
+     * 受信データ形式: "電圧(V),電流(A)" (例: "3.102,0.005123")
+     */
     function handleData(error, data) {
       if (error || !data) return;
       let values = String(data).split(',');
@@ -346,46 +402,69 @@
         let rawVoltage = parseFloat(values[0]);
         let rawCurrent = parseFloat(values[1]);
         
+        // アニメーション用にグローバル変数へセット
         window.currentValueGlobal = rawCurrent;
         window.voltageValueGlobal = rawVoltage;
 
+        // 単位変換と表示更新 (A -> mA)
         let current_mA = (rawCurrent * 1000).toFixed(3); 
         document.querySelectorAll('#voltText').forEach(el => el.setAttribute('value', rawVoltage + " V"));
         document.querySelectorAll('#currText').forEach(el => el.setAttribute('value', current_mA + " mA"));
         
+        // オームの法則による抵抗値計算 (R = V / I)
         let resistanceText = "---";
-        if (rawCurrent > 0.000001) { 
+        if (rawCurrent > 0.000001) { // ゼロ除算防止
             let R = rawVoltage / rawCurrent;
-            if (R >= 1000) { resistanceText = (R / 1000).toFixed(2) + " k-ohm"; } else { resistanceText = R.toFixed(0) + " ohm"; }
-        } else { resistanceText = "OPEN"; }
+            // 1kΩ以上は単位を変えて見やすくする
+            if (R >= 1000) { 
+                resistanceText = (R / 1000).toFixed(2) + " k-ohm"; 
+            } else { 
+                resistanceText = R.toFixed(0) + " ohm"; 
+            }
+        } else { 
+            resistanceText = "OPEN"; // 電流が流れていない場合
+        }
         document.querySelectorAll('#resText').forEach(el => el.setAttribute('value', "R: " + resistanceText));
 
+        // グラフ用履歴更新
         dataHistory.push({ v: rawVoltage, c: rawCurrent });
         if (dataHistory.length > maxDataPoints) dataHistory.shift();
         drawGraph();
       }
     }
 
+    // グラフ描画関数 (HUD内 Canvas)
     function drawGraph() {
       const canvas = document.getElementById('graphCanvas');
       const ctx = canvas.getContext('2d');
       const w = canvas.width; const h = canvas.height;
       ctx.clearRect(0, 0, w, h);
+      
+      // グリッド線描画
       ctx.strokeStyle = '#555'; ctx.lineWidth = 1; ctx.beginPath();
       for(let i=1; i<4; i++) { let y = (h / 4) * i; ctx.moveTo(0, y); ctx.lineTo(w, y); }
       ctx.stroke();
+
       if (dataHistory.length < 2) return;
-      const maxVolt = 3.5; const maxCurr = 0.02;
+      
+      const maxVolt = 3.5; // グラフの最大電圧スケール
+      const maxCurr = 0.02; // グラフの最大電流スケール (20mA)
+
+      // 電圧グラフ (赤線)
       ctx.beginPath(); ctx.strokeStyle = '#FF3B30'; ctx.lineWidth = 2;
       for (let i = 0; i < dataHistory.length; i++) {
-        let x = (i / (maxDataPoints - 1)) * w; let y = h - (dataHistory[i].v / maxVolt) * h;
+        let x = (i / (maxDataPoints - 1)) * w; 
+        let y = h - (dataHistory[i].v / maxVolt) * h;
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.stroke();
+
+      // 電流グラフ (青線)
       ctx.beginPath(); ctx.strokeStyle = '#007AFF'; ctx.lineWidth = 2;
       for (let i = 0; i < dataHistory.length; i++) {
         let x = (i / (maxDataPoints - 1)) * w;
-        let val = dataHistory[i].c; if (val > maxCurr) val = maxCurr;
+        let val = dataHistory[i].c; 
+        if (val > maxCurr) val = maxCurr; // クランプ処理
         let y = h - (val / maxCurr) * h;
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
