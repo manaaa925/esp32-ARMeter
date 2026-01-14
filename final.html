@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>AR Circuit Particle Boost</title>
+  <title>AR Proportional Density</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <script src="https://unpkg.com/p5ble@0.0.7/dist/p5.ble.js"></script>
@@ -41,8 +41,10 @@
 
   <script>
     window.currentValueGlobal = 0.0;
+    window.voltageValueGlobal = 0.0;
     window.showFlowGlobal = true;
 
+    // 回路図画像更新用コンポーネント
     AFRAME.registerComponent('canvas-updater', {
       init: function() {
         this.el.sceneEl.addEventListener('loaded', () => {
@@ -67,6 +69,9 @@
         this.wires = [];
         this.particles = [];
         this.timeOffset = 0;
+        
+        // ★粒の最大数: 30個に増量 (滑らかな密度変化のため)
+        const MAX_PARTICLES = 30;
 
         for (let i = 0; i < 3; i++) {
           let wire = document.createElement('a-cylinder');
@@ -77,12 +82,18 @@
           this.wires.push(wire);
 
           let segmentParticles = [];
-          // ★変更点1: 粒の数を 3 -> 6 に増やしました
-          for(let j=0; j<6; j++){
+          for(let j=0; j < MAX_PARTICLES; j++){
             let p = document.createElement('a-sphere');
             p.setAttribute('color', '#FFFF00');
             p.setAttribute('radius', '0.04');
             p.setAttribute('visible', 'false');
+            
+            // ★重要: 各粒に「表示されやすさランク(0.0~1.0)」をランダムに割り振る
+            // これにより、電流が少ないときは「ランクが低い粒」だけが表示され、
+            // 全体として「まばら」に見えるようになる。
+            // 単純な乱数ではなく、黄金比を使って均等に分散させる
+            p.densityRank = (j * 0.61803398875) % 1.0; 
+            
             this.el.sceneEl.appendChild(p);
             segmentParticles.push(p);
           }
@@ -106,21 +117,31 @@
         let p0 = new THREE.Vector3(); this.m0.object3D.getWorldPosition(p0); p0.y += 0.02;
         let p1 = new THREE.Vector3(); this.m1.object3D.getWorldPosition(p1); p1.y += 0.02;
 
-        let speed = 0;
-        if(window.currentValueGlobal > 0.0001) {
-            // ★変更点2: 速度係数と上限を調整して変化を分かりやすく
-            speed = window.currentValueGlobal * 800; // 係数アップ
-            if(speed > 0.03) speed = 0.03; // 上限を0.03まで開放（速い時は速く）
-            if(speed < 0.002) speed = 0.002; // 下限
-        }
-        this.timeOffset += speed;
+        // ★速度は一定（ゆっくり）
+        this.timeOffset += 0.003; 
 
-        this.updateSegment(0, p6, p0, speed > 0);
-        this.updateSegment(1, p0, p1, speed > 0);
-        this.updateSegment(2, p1, p6, speed > 0);
+        // ★密度の計算 (Proportional Density)
+        let I = window.currentValueGlobal; // 電流(A)
+        let V = window.voltageValueGlobal; // 電圧(V)
+
+        // 基準: 20mA (0.02A) で密度100%とする
+        let maxCurrentRef = 0.02; 
+        let densityRatio = I / maxCurrentRef;
+
+        // 救済措置: 電流0でも電圧があれば、少し(5%)だけ表示する
+        if (densityRatio < 0.05 && V > 1.5) {
+            densityRatio = 0.05; 
+        }
+
+        // 1.0を超えないようにキャップ
+        if (densityRatio > 1.0) densityRatio = 1.0;
+
+        this.updateSegment(0, p6, p0, densityRatio);
+        this.updateSegment(1, p0, p1, densityRatio);
+        this.updateSegment(2, p1, p6, densityRatio);
       },
 
-      updateSegment: function(index, start, end, isFlowing) {
+      updateSegment: function(index, start, end, densityRatio) {
         let wire = this.wires[index];
         wire.setAttribute('visible', 'true');
         let dist = start.distanceTo(end);
@@ -131,9 +152,15 @@
         wire.object3D.rotateX(Math.PI / 2);
 
         let parts = this.particles[index];
+        
         parts.forEach((p, i) => {
-            if(isFlowing){
+            // ★分散表示ロジック
+            // この粒のランクが、現在の密度割合(densityRatio)以下なら表示する
+            // densityRatioが 0.1 なら、ランク0.1以下の粒(全体の10%)だけが表示される
+            if (p.densityRank < densityRatio) {
                 p.setAttribute('visible', 'true');
+                
+                // 位置計算 (全体に均等に散らばるように配置)
                 let progress = (this.timeOffset + (i / parts.length)) % 1.0;
                 let pos = start.clone().lerp(end, progress);
                 p.setAttribute('position', pos);
@@ -320,13 +347,14 @@
         let rawCurrent = parseFloat(values[1]);
         
         window.currentValueGlobal = rawCurrent;
+        window.voltageValueGlobal = rawVoltage;
 
-        let current_mA = (rawCurrent * 1000).toFixed(2);
+        let current_mA = (rawCurrent * 1000).toFixed(3); 
         document.querySelectorAll('#voltText').forEach(el => el.setAttribute('value', rawVoltage + " V"));
         document.querySelectorAll('#currText').forEach(el => el.setAttribute('value', current_mA + " mA"));
         
         let resistanceText = "---";
-        if (rawCurrent > 0.00001) { 
+        if (rawCurrent > 0.000001) { 
             let R = rawVoltage / rawCurrent;
             if (R >= 1000) { resistanceText = (R / 1000).toFixed(2) + " k-ohm"; } else { resistanceText = R.toFixed(0) + " ohm"; }
         } else { resistanceText = "OPEN"; }
