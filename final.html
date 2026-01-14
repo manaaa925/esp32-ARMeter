@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>AR Circuit Diagram</title>
+  <title>AR Circuit Diagram Fixed</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <script src="https://unpkg.com/p5ble@0.0.7/dist/p5.ble.js"></script>
@@ -12,14 +12,21 @@
 
   <style>
     body { margin: 0; overflow: hidden; font-family: sans-serif; }
-    /* UIは変更していません */
+    
+    /* === UIスタイル (変更なし) === */
     #hud {
       position: absolute; top: 10px; left: 10px; z-index: 1000;
       background: rgba(0, 0, 0, 0.6); padding: 10px; border-radius: 8px; color: white; pointer-events: none;
     }
     #status { font-size: 14px; margin-bottom: 5px; font-weight: bold; }
     .status-ok { color: #00FF00; } .status-ng { color: #FF3B30; }
+    
+    /* グラフ用キャンバス */
     #graphCanvas { background: rgba(0, 0, 0, 0.3); border: 1px solid #888; display: block; }
+
+    /* 記号描画用キャンバス (画面には出さない) */
+    .symbol-canvas { display: none; }
+
     #connectBtn {
       position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
       padding: 12px 25px; font-size: 16px; font-weight: bold; color: white;
@@ -43,6 +50,20 @@
     window.currentValueGlobal = 0.0;
     window.showFlowGlobal = true;
 
+    // 回路記号をCanvasに描くコンポーネント
+    AFRAME.registerComponent('canvas-updater', {
+      init: function() {
+        this.el.sceneEl.addEventListener('loaded', () => {
+          // テクスチャの更新通知
+          const maps = ['#cv-batt', '#cv-res', '#cv-led'];
+          maps.forEach(id => {
+            const el = document.querySelector(id);
+            if(el) el.needsUpdate = true;
+          });
+        });
+      }
+    });
+
     AFRAME.registerComponent('circuit-animator', {
       init: function () {
         this.wires = [];
@@ -52,8 +73,7 @@
         for (let i = 0; i < 3; i++) {
           let wire = document.createElement('a-cylinder');
           wire.setAttribute('color', '#FF0000');
-          // ★変更点1: 線を太くしました (0.005 -> 0.02)
-          wire.setAttribute('radius', '0.02');
+          wire.setAttribute('radius', '0.02'); // 太い線
           wire.setAttribute('visible', 'false');
           this.el.sceneEl.appendChild(wire);
           this.wires.push(wire);
@@ -62,8 +82,7 @@
           for(let j=0; j<3; j++){
             let p = document.createElement('a-sphere');
             p.setAttribute('color', '#FFFF00');
-            // ★変更点2: 粒を大きくしました (0.015 -> 0.04)
-            p.setAttribute('radius', '0.04');
+            p.setAttribute('radius', '0.04'); // 大きい粒
             p.setAttribute('visible', 'false');
             this.el.sceneEl.appendChild(p);
             segmentParticles.push(p);
@@ -88,11 +107,14 @@
         let p0 = new THREE.Vector3(); this.m0.object3D.getWorldPosition(p0); p0.y += 0.02;
         let p1 = new THREE.Vector3(); this.m1.object3D.getWorldPosition(p1); p1.y += 0.02;
 
+        // ★速度調整: 前回の 1/5 くらいに落としました
+        // 0.02A(20mA)のときに speedが0.01 くらいになるように調整
         let speed = 0;
         if(window.currentValueGlobal > 0.0001) {
-            speed = window.currentValueGlobal * 2000; 
-            if(speed > 0.05) speed = 0.05; 
-            if(speed < 0.005) speed = 0.005;
+            speed = window.currentValueGlobal * 400; 
+            // 上限を厳しく制限 (0.01 = ゆっくり)
+            if(speed > 0.015) speed = 0.015; 
+            if(speed < 0.001) speed = 0.001;
         }
         this.timeOffset += speed;
 
@@ -141,26 +163,25 @@
     <div style="font-size:10px; color:#ccc; margin-top:2px;">Red: Voltage / Blue: Current</div>
   </div>
 
-  <a-scene embedded arjs='sourceType: webcam; detectionMode: mono_and_matrix; matrixCodeType: 3x3; debugUIEnabled: false;' circuit-animator>
+  <canvas id="cv-batt" class="symbol-canvas" width="256" height="256"></canvas>
+  <canvas id="cv-res" class="symbol-canvas" width="256" height="256"></canvas>
+  <canvas id="cv-led" class="symbol-canvas" width="256" height="256"></canvas>
+
+  <a-scene embedded arjs='sourceType: webcam; detectionMode: mono_and_matrix; matrixCodeType: 3x3; debugUIEnabled: false;' circuit-animator canvas-updater>
     
     <a-assets>
-        <img id="img-battery" src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Battery_symbol.svg/200px-Battery_symbol.svg.png">
-        <img id="img-resistor" src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Resistor_symbol_America.svg/200px-Resistor_symbol_America.svg.png">
-        <img id="img-led" src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/LED_symbol.svg/200px-LED_symbol.svg.png">
+      <canvas id="cv-batt-asset" src="#cv-batt"></canvas>
     </a-assets>
 
     <a-marker id="marker-batt" type='barcode' value='6'>
        <a-entity id="batteryInfo">
-         <a-plane position="0 0.1 0" rotation="-90 0 0" width="1.2" height="0.8" color="white"></a-plane>
-         <a-image src="#img-battery" position="0 0.11 0" rotation="-90 0 0" width="1" height="0.6" transparent="true"></a-image>
+         <a-plane position="0 0.1 0" rotation="-90 0 0" width="1" height="1" material="src: #cv-batt; transparent:true; opacity: 1;"></a-plane>
        </a-entity>
     </a-marker>
 
     <a-marker id="marker-res" type='barcode' value='0'>
        <a-entity id="resistorInfo">
-         <a-plane position="0 0.1 -0.6" rotation="-90 0 0" width="1.2" height="0.6" color="white"></a-plane>
-         <a-image src="#img-resistor" position="0 0.11 -0.6" rotation="-90 0 0" width="1" height="0.4" transparent="true"></a-image>
-         
+         <a-plane position="0 0.1 -0.6" rotation="-90 0 0" width="1" height="1" material="src: #cv-res; transparent:true; opacity: 1;"></a-plane>
          <a-text id="currText" value="--- mA" color="yellow" position="0 0.02 0" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
          <a-text id="resText" value="R: ---" color="#00FF00" position="0 0.02 0.6" rotation="-90 0 0" align="center" scale="2.5 2.5 2.5"></a-text>
        </a-entity>
@@ -168,9 +189,7 @@
 
     <a-marker id="marker-led" type='barcode' value='1'>
        <a-entity id="ledInfo">
-         <a-plane position="0 0.1 -0.3" rotation="-90 0 0" width="1" height="0.8" color="white"></a-plane>
-         <a-image src="#img-led" position="0 0.11 -0.3" rotation="-90 0 0" width="0.8" height="0.6" transparent="true"></a-image>
-
+         <a-plane position="0 0.1 -0.3" rotation="-90 0 0" width="1" height="1" material="src: #cv-led; transparent:true; opacity: 1;"></a-plane>
          <a-text id="voltText" value="--- V" color="#FF3B30" position="0 0.02 0.3" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
        </a-entity>
     </a-marker>
@@ -183,7 +202,6 @@
     const targetUuid  = "BEB5483E-36E1-4688-B7F5-EA07361B26A8";
     let myBLE, myCharacteristic;
     let dataHistory = []; const maxDataPoints = 100;
-    
     let showInfo = true;
 
     function setup() {
@@ -191,18 +209,79 @@
       myBLE = new p5ble();
       const connectBtn = select("#connectBtn");
       if (connectBtn) connectBtn.mousePressed(connectToBle);
+      
       drawGraph();
+      // ★起動時に回路記号を描画する関数を実行
+      drawAllSymbols();
+    }
+
+    // ★★★ 回路記号をプログラムで描く関数 ★★★
+    function drawAllSymbols() {
+      // 1. Battery Symbol
+      let c = document.getElementById('cv-batt');
+      let ctx = c.getContext('2d');
+      ctx.fillStyle = 'white'; ctx.fillRect(0,0,256,256); // 背景白
+      ctx.lineWidth = 10; ctx.strokeStyle = 'black'; ctx.lineCap = 'round';
+      // 左線
+      ctx.beginPath(); ctx.moveTo(0, 128); ctx.lineTo(100, 128); ctx.stroke();
+      // 長い棒 (+)
+      ctx.lineWidth = 15;
+      ctx.beginPath(); ctx.moveTo(100, 60); ctx.lineTo(100, 196); ctx.stroke();
+      // 短い棒 (-)
+      ctx.beginPath(); ctx.moveTo(156, 90); ctx.lineTo(156, 166); ctx.stroke();
+      // 右線
+      ctx.lineWidth = 10;
+      ctx.beginPath(); ctx.moveTo(156, 128); ctx.lineTo(256, 128); ctx.stroke();
+      // 文字
+      ctx.fillStyle = 'black'; ctx.font = 'bold 40px Arial'; ctx.textAlign = 'center';
+      ctx.fillText("Battery", 128, 40);
+
+      // 2. Resistor Symbol (Zigzag)
+      c = document.getElementById('cv-res'); ctx = c.getContext('2d');
+      ctx.fillStyle = 'white'; ctx.fillRect(0,0,256,256);
+      ctx.lineWidth = 10; ctx.strokeStyle = 'black'; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(0, 128); ctx.lineTo(40, 128); // 線
+      ctx.lineTo(60, 80); ctx.lineTo(100, 176); // ジグ
+      ctx.lineTo(140, 80); ctx.lineTo(180, 176); // ザグ
+      ctx.lineTo(200, 128); ctx.lineTo(256, 128); // 線
+      ctx.stroke();
+      ctx.fillStyle = 'black'; ctx.font = 'bold 40px Arial'; ctx.textAlign = 'center';
+      ctx.fillText("Resistor", 128, 50);
+
+      // 3. LED Symbol
+      c = document.getElementById('cv-led'); ctx = c.getContext('2d');
+      ctx.fillStyle = 'white'; ctx.fillRect(0,0,256,256);
+      ctx.lineWidth = 8; ctx.strokeStyle = 'black';
+      // 三角形
+      ctx.beginPath(); ctx.moveTo(128, 170); ctx.lineTo(80, 90); ctx.lineTo(176, 90); ctx.closePath(); ctx.stroke();
+      // 下の線
+      ctx.beginPath(); ctx.moveTo(80, 170); ctx.lineTo(176, 170); ctx.stroke();
+      // 縦線貫通
+      ctx.beginPath(); ctx.moveTo(128, 90); ctx.lineTo(128, 60); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(128, 170); ctx.lineTo(128, 200); ctx.stroke();
+      // 矢印
+      ctx.beginPath(); ctx.moveTo(180, 140); ctx.lineTo(220, 180); 
+      ctx.moveTo(210, 180); ctx.lineTo(220, 180); ctx.lineTo(220, 170); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(190, 120); ctx.lineTo(230, 160);
+      ctx.moveTo(220, 160); ctx.lineTo(230, 160); ctx.lineTo(230, 150); ctx.stroke();
+      
+      ctx.fillStyle = 'black'; ctx.font = 'bold 40px Arial'; ctx.textAlign = 'center';
+      ctx.fillText("LED", 128, 40);
+
+      // テクスチャ反映用のおまじない
+      document.querySelector('#marker-batt a-plane').getObject3D('mesh').material.map.needsUpdate = true;
+      document.querySelector('#marker-res a-plane').getObject3D('mesh').material.map.needsUpdate = true;
+      document.querySelector('#marker-led a-plane').getObject3D('mesh').material.map.needsUpdate = true;
     }
 
     function toggleFlow() {
       window.showFlowGlobal = !window.showFlowGlobal;
       const btn = document.getElementById('btnFlow');
       if (window.showFlowGlobal) {
-        btn.classList.add('active');
-        btn.innerText = "Circuit: ON";
+        btn.classList.add('active'); btn.innerText = "Circuit: ON";
       } else {
-        btn.classList.remove('active');
-        btn.innerText = "Circuit: OFF";
+        btn.classList.remove('active'); btn.innerText = "Circuit: OFF";
       }
     }
 
@@ -215,12 +294,10 @@
         document.querySelector('#batteryInfo')
       ];
       if (showInfo) {
-        btn.classList.add('active');
-        btn.innerText = "Values: ON";
+        btn.classList.add('active'); btn.innerText = "Values: ON";
         entities.forEach(el => { if(el) el.setAttribute('visible', 'true'); });
       } else {
-        btn.classList.remove('active');
-        btn.innerText = "Values: OFF";
+        btn.classList.remove('active'); btn.innerText = "Values: OFF";
         entities.forEach(el => { if(el) el.setAttribute('visible', 'false'); });
       }
     }
