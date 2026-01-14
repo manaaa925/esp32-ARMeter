@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>AR Circuit Final Layout</title>
+  <title>AR Circuit Particle Boost</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <script src="https://unpkg.com/p5ble@0.0.7/dist/p5.ble.js"></script>
@@ -51,7 +51,6 @@
             const el = document.querySelector(id);
             if(el) el.needsUpdate = true;
           });
-          // iOSなどでテクスチャが反映されない場合の強制更新
           setTimeout(() => {
              document.querySelectorAll('a-plane[material]').forEach(plane => {
                  if(plane.getObject3D('mesh').material.map) {
@@ -78,7 +77,8 @@
           this.wires.push(wire);
 
           let segmentParticles = [];
-          for(let j=0; j<3; j++){
+          // ★変更点1: 粒の数を 3 -> 6 に増やしました
+          for(let j=0; j<6; j++){
             let p = document.createElement('a-sphere');
             p.setAttribute('color', '#FFFF00');
             p.setAttribute('radius', '0.04');
@@ -108,9 +108,10 @@
 
         let speed = 0;
         if(window.currentValueGlobal > 0.0001) {
-            speed = window.currentValueGlobal * 400; 
-            if(speed > 0.015) speed = 0.015; 
-            if(speed < 0.001) speed = 0.001;
+            // ★変更点2: 速度係数と上限を調整して変化を分かりやすく
+            speed = window.currentValueGlobal * 800; // 係数アップ
+            if(speed > 0.03) speed = 0.03; // 上限を0.03まで開放（速い時は速く）
+            if(speed < 0.002) speed = 0.002; // 下限
         }
         this.timeOffset += speed;
 
@@ -228,23 +229,15 @@
       c = document.getElementById('cv-res'); ctx = c.getContext('2d');
       ctx.fillStyle = 'white'; ctx.fillRect(0,0,256,256);
       ctx.lineWidth = 10; ctx.strokeStyle = 'black'; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-      // ジグザグ線
       ctx.beginPath();
       ctx.moveTo(0, 128); ctx.lineTo(40, 128);
       ctx.lineTo(60, 80); ctx.lineTo(100, 176);
       ctx.lineTo(140, 80); ctx.lineTo(180, 176);
       ctx.lineTo(200, 128); ctx.lineTo(256, 128);
       ctx.stroke();
-      // ★追加: 矢印 (可変を表す)
-      ctx.beginPath();
-      ctx.moveTo(80, 200); ctx.lineTo(180, 50); // 斜め線
-      ctx.stroke();
-      // 矢印の頭
-      ctx.beginPath();
-      ctx.moveTo(180, 50); ctx.lineTo(160, 60);
-      ctx.moveTo(180, 50); ctx.lineTo(170, 80);
-      ctx.stroke();
-      
+      // 矢印
+      ctx.beginPath(); ctx.moveTo(80, 200); ctx.lineTo(180, 50); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(180, 50); ctx.lineTo(160, 60); ctx.moveTo(180, 50); ctx.lineTo(170, 80); ctx.stroke();
       ctx.fillStyle = 'black'; ctx.font = 'bold 35px Arial'; ctx.textAlign = 'center';
       ctx.fillText("Var. Resistor", 128, 40);
 
