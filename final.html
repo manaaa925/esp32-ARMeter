@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>AR Dynamic Flow</title>
+  <title>AR Circuit Diagram</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <script src="https://unpkg.com/p5ble@0.0.7/dist/p5.ble.js"></script>
@@ -12,8 +12,7 @@
 
   <style>
     body { margin: 0; overflow: hidden; font-family: sans-serif; }
-    
-    /* 左上のグラフ・ステータス表示 */
+    /* UIは変更していません */
     #hud {
       position: absolute; top: 10px; left: 10px; z-index: 1000;
       background: rgba(0, 0, 0, 0.6); padding: 10px; border-radius: 8px; color: white; pointer-events: none;
@@ -21,8 +20,6 @@
     #status { font-size: 14px; margin-bottom: 5px; font-weight: bold; }
     .status-ok { color: #00FF00; } .status-ng { color: #FF3B30; }
     #graphCanvas { background: rgba(0, 0, 0, 0.3); border: 1px solid #888; display: block; }
-
-    /* 中央下の接続ボタン */
     #connectBtn {
       position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
       padding: 12px 25px; font-size: 16px; font-weight: bold; color: white;
@@ -30,8 +27,6 @@
       z-index: 2000; pointer-events: auto; cursor: pointer;
       box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
-
-    /* 左下の操作ボタンエリア */
     #controls {
       position: absolute; bottom: 20px; left: 10px; z-index: 2000;
       display: flex; gap: 10px; pointer-events: auto;
@@ -45,32 +40,30 @@
   </style>
 
   <script>
-    // グローバル変数で電流値を共有
-    window.currentValueGlobal = 0.0; // A単位
-    window.showFlowGlobal = true;    // 回路表示フラグ
+    window.currentValueGlobal = 0.0;
+    window.showFlowGlobal = true;
 
     AFRAME.registerComponent('circuit-animator', {
       init: function () {
-        this.wires = [];     // 赤い線
-        this.particles = []; // 黄色い粒
-        this.timeOffset = 0; // アニメーション用タイマー
+        this.wires = [];
+        this.particles = [];
+        this.timeOffset = 0;
 
-        // 3つの区間を作成 (0:Bat->Res, 1:Res->LED, 2:LED->Bat)
         for (let i = 0; i < 3; i++) {
-          // 線を作る
           let wire = document.createElement('a-cylinder');
           wire.setAttribute('color', '#FF0000');
-          wire.setAttribute('radius', '0.005');
+          // ★変更点1: 線を太くしました (0.005 -> 0.02)
+          wire.setAttribute('radius', '0.02');
           wire.setAttribute('visible', 'false');
           this.el.sceneEl.appendChild(wire);
           this.wires.push(wire);
 
-          // この区間の粒を作る (1区間に3つ)
           let segmentParticles = [];
           for(let j=0; j<3; j++){
             let p = document.createElement('a-sphere');
-            p.setAttribute('color', '#FFFF00'); // 黄色
-            p.setAttribute('radius', '0.015');  // 粒の大きさ
+            p.setAttribute('color', '#FFFF00');
+            // ★変更点2: 粒を大きくしました (0.015 -> 0.04)
+            p.setAttribute('radius', '0.04');
             p.setAttribute('visible', 'false');
             this.el.sceneEl.appendChild(p);
             segmentParticles.push(p);
@@ -78,14 +71,12 @@
           this.particles.push(segmentParticles);
         }
 
-        // マーカー取得
         this.m6 = document.querySelector('#marker-batt');
         this.m0 = document.querySelector('#marker-res');
         this.m1 = document.querySelector('#marker-led');
       },
 
       tick: function (time, timeDelta) {
-        // マーカーが見えていない、またはボタンでOFFなら非表示
         if (!window.showFlowGlobal || !this.m6 || !this.m0 || !this.m1 || 
             !this.m6.object3D.visible || !this.m0.object3D.visible || !this.m1.object3D.visible) {
           this.wires.forEach(w => w.setAttribute('visible', 'false'));
@@ -93,34 +84,24 @@
           return;
         }
 
-        // 座標取得 (少し浮かせる)
         let p6 = new THREE.Vector3(); this.m6.object3D.getWorldPosition(p6); p6.y += 0.02;
         let p0 = new THREE.Vector3(); this.m0.object3D.getWorldPosition(p0); p0.y += 0.02;
         let p1 = new THREE.Vector3(); this.m1.object3D.getWorldPosition(p1); p1.y += 0.02;
 
-        // 電流値に応じてスピード計算 (0.0001A以下なら止める)
-        // 感度調整: 電流(A) * 2000 くらいのスピードで動かす
         let speed = 0;
         if(window.currentValueGlobal > 0.0001) {
             speed = window.currentValueGlobal * 2000; 
-            // 速すぎ防止
             if(speed > 0.05) speed = 0.05; 
-            // 遅すぎ防止（見えやすくするため）
             if(speed < 0.005) speed = 0.005;
         }
-        this.timeOffset += speed; // タイマー進行
+        this.timeOffset += speed;
 
-        // --- 区間ごとの描画更新 ---
-        // 1. 電池(6) -> 抵抗(0)
         this.updateSegment(0, p6, p0, speed > 0);
-        // 2. 抵抗(0) -> LED(1)
         this.updateSegment(1, p0, p1, speed > 0);
-        // 3. LED(1) -> 電池(6)
         this.updateSegment(2, p1, p6, speed > 0);
       },
 
       updateSegment: function(index, start, end, isFlowing) {
-        // --- 線の更新 ---
         let wire = this.wires[index];
         wire.setAttribute('visible', 'true');
         let dist = start.distanceTo(end);
@@ -130,17 +111,15 @@
         wire.object3D.lookAt(end);
         wire.object3D.rotateX(Math.PI / 2);
 
-        // --- 粒の更新 ---
         let parts = this.particles[index];
         parts.forEach((p, i) => {
             if(isFlowing){
                 p.setAttribute('visible', 'true');
-                // 進行度 (0.0 ~ 1.0) を計算。粒ごとにずらす
                 let progress = (this.timeOffset + (i / parts.length)) % 1.0;
                 let pos = start.clone().lerp(end, progress);
                 p.setAttribute('position', pos);
             } else {
-                p.setAttribute('visible', 'false'); // 電流0なら粒は消す
+                p.setAttribute('visible', 'false');
             }
         });
       }
@@ -164,18 +143,24 @@
 
   <a-scene embedded arjs='sourceType: webcam; detectionMode: mono_and_matrix; matrixCodeType: 3x3; debugUIEnabled: false;' circuit-animator>
     
+    <a-assets>
+        <img id="img-battery" src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Battery_symbol.svg/200px-Battery_symbol.svg.png">
+        <img id="img-resistor" src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Resistor_symbol_America.svg/200px-Resistor_symbol_America.svg.png">
+        <img id="img-led" src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/LED_symbol.svg/200px-LED_symbol.svg.png">
+    </a-assets>
+
     <a-marker id="marker-batt" type='barcode' value='6'>
        <a-entity id="batteryInfo">
-         <a-text value="Battery" color="cyan" position="0 0.1 -0.5" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
-         <a-box position="0 0.1 0" scale="0.5 0.2 0.8" color="#333"></a-box> 
-         <a-text value="+" color="red" position="0.3 0.21 0" rotation="-90 0 0" scale="2 2 2"></a-text>
-         <a-text value="-" color="blue" position="-0.3 0.21 0" rotation="-90 0 0" scale="2 2 2"></a-text>
+         <a-plane position="0 0.1 0" rotation="-90 0 0" width="1.2" height="0.8" color="white"></a-plane>
+         <a-image src="#img-battery" position="0 0.11 0" rotation="-90 0 0" width="1" height="0.6" transparent="true"></a-image>
        </a-entity>
     </a-marker>
 
     <a-marker id="marker-res" type='barcode' value='0'>
        <a-entity id="resistorInfo">
-         <a-text value="Resistor" color="yellow" position="0 0.02 -0.6" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+         <a-plane position="0 0.1 -0.6" rotation="-90 0 0" width="1.2" height="0.6" color="white"></a-plane>
+         <a-image src="#img-resistor" position="0 0.11 -0.6" rotation="-90 0 0" width="1" height="0.4" transparent="true"></a-image>
+         
          <a-text id="currText" value="--- mA" color="yellow" position="0 0.02 0" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
          <a-text id="resText" value="R: ---" color="#00FF00" position="0 0.02 0.6" rotation="-90 0 0" align="center" scale="2.5 2.5 2.5"></a-text>
        </a-entity>
@@ -183,7 +168,9 @@
 
     <a-marker id="marker-led" type='barcode' value='1'>
        <a-entity id="ledInfo">
-         <a-text value="LED" color="white" position="0 0.02 -0.3" rotation="-90 0 0" align="center" scale="1.5 1.5 1.5"></a-text>
+         <a-plane position="0 0.1 -0.3" rotation="-90 0 0" width="1" height="0.8" color="white"></a-plane>
+         <a-image src="#img-led" position="0 0.11 -0.3" rotation="-90 0 0" width="0.8" height="0.6" transparent="true"></a-image>
+
          <a-text id="voltText" value="--- V" color="#FF3B30" position="0 0.02 0.3" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
        </a-entity>
     </a-marker>
@@ -197,9 +184,7 @@
     let myBLE, myCharacteristic;
     let dataHistory = []; const maxDataPoints = 100;
     
-    // UI表示フラグ管理
     let showInfo = true;
-    // window.showFlowGlobal は上で定義済み
 
     function setup() {
       noCanvas();
@@ -209,7 +194,6 @@
       drawGraph();
     }
 
-    // 回路図・アニメーション ON/OFF
     function toggleFlow() {
       window.showFlowGlobal = !window.showFlowGlobal;
       const btn = document.getElementById('btnFlow');
@@ -222,7 +206,6 @@
       }
     }
 
-    // 文字情報 ON/OFF
     function toggleInfo() {
       showInfo = !showInfo;
       const btn = document.getElementById('btnInfo');
@@ -277,7 +260,6 @@
         let rawVoltage = parseFloat(values[0]);
         let rawCurrent = parseFloat(values[1]);
         
-        // ★グローバル変数に電流値を渡す（アニメーション用）
         window.currentValueGlobal = rawCurrent;
 
         let current_mA = (rawCurrent * 1000).toFixed(2);
