@@ -38,7 +38,7 @@ function setup() {
 
 /**
  * [接続開始関数: connectToBle]
- * ユーザー操作をトリガーとして，Web Bluetooth APIによるデバイススキャンを開始する．
+ * ユーザ操作をトリガーとして，Web Bluetooth APIによるデバイススキャンを開始する．
  */
 function connectToBle() {
   // 指定したサービスUUIDを持つデバイスへの接続を試行
